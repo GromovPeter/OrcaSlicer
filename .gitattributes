@@ -13,3 +13,9 @@
 
 # OCCT BRep fixtures, kept byte for byte as OCCT wrote them.
 *.brep -text
+
+# The Moonraker worker verifies this calibration fixture by its exact SHA-256.
+resources/calibration/ORCA_PLA_LOADED_CALIBRATION_20261021_v2.gcode -text
+
+# Immutable upstream reference files are checked against their published hashes.
+third_party/crealityprint-recovery/** -text whitespace=-blank-at-eol,-blank-at-eof

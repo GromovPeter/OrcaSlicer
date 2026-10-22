@@ -1,3 +1,5 @@
+#include "libslic3r/GCode/FlowTimeline.hpp"
+#include "libslic3r/GCode/AdaptiveTemperaturePlanner.hpp"
 #include "libslic3r/ArcFitter.hpp"
 #include "libslic3r/Config.hpp"
 #include "libslic3r/CustomGCode.hpp"
@@ -37,6 +39,8 @@
 #include <cstddef>
 #include <cmath>
 #include <exception>
+#include <stdexcept>
+#include <ios>
 #include <deque>
 #include <cstdio>
 #include <cstring>
@@ -572,7 +576,7 @@ size_t GCodeProcessor::TimeMachine::plan_klipper(bool lazy)
     return flush_count;
 }
 
-void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, PrintEstimatedStatistics::ETimeMode mode, size_t keep_last_n_blocks, float additional_time, EMoveType target_move_type, bool is_final)
+void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, PrintEstimatedStatistics::ETimeMode mode, size_t keep_last_n_blocks, float additional_time, EMoveType target_move_type, bool is_final, FlowTimeline* flow_timeline, bool piecewise_temperatures)
 {
     if (!enabled)
         return;
@@ -636,6 +640,47 @@ void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, P
         }
 
         time += block_time;
+        if (flow_timeline != nullptr) {
+            FlowTimelineMotion motion;
+            motion.start_time = time - motion_time;
+            motion.duration = motion_time;
+            motion.distance = block.distance;
+            motion.entry_speed = block.feedrate_profile.entry;
+            motion.cruise_speed = block.trapezoid.cruise_feedrate;
+            motion.exit_speed = block.feedrate_profile.exit;
+            motion.acceleration = block.acceleration;
+            motion.layer_id = block.layer_id;
+            motion.role = block.role;
+            motion.remaining_internal_moves = block.remaining_internal_g1_lines;
+            motion.prepare_stage = block.flags.prepare_stage;
+            motion.protected_region = block.layer_id == 1 || block.flags.prepare_stage || block.skippable_type != SkipType::stNone;
+            // Virtual flushing can have blocks without an owning preview move.
+            // Keep their time, but never infer deposited volume from another move.
+            if (block.move_id > 0 && block.move_id < result.moves.size() && !result.moves[block.move_id].internal_only) {
+                const auto& move = result.moves[block.move_id];
+                motion.source_line = move.gcode_id;
+                motion.filament_id = move.extruder_id; // This field identifies filament, not physical heater.
+                motion.delta_e = move.delta_extruder;
+                motion.target_temperature = move.temperature;
+                if (motion.filament_id < result.filament_diameters.size()) {
+                    const double diameter = result.filament_diameters[motion.filament_id];
+                    motion.filament_area = 0.25 * M_PI * diameter * diameter;
+                }
+                // A filament map identifies an extruder, not necessarily a heater.
+                // Leave heater_id unresolved until generator provenance supplies it.
+                switch (block.move_type) {
+                case EMoveType::Extrude: motion.kind = FlowMotionKind::Extrusion; break;
+                case EMoveType::Travel: motion.kind = FlowMotionKind::Travel; break;
+                case EMoveType::Retract: motion.kind = FlowMotionKind::Retract; break;
+                case EMoveType::Unretract: motion.kind = FlowMotionKind::Unretract; break;
+                case EMoveType::Wipe: motion.kind = FlowMotionKind::Wipe; break;
+                default: break;
+                }
+            }
+            if (motion.kind == FlowMotionKind::Unknown)
+                motion.protected_region = true;
+            flow_timeline->append(motion);
+        }
         // Orca: accumulate per-SkipType time spent inside SKIPPABLE regions, folded into this single
         // calculate_time write site. Fires fleet-wide (the shipping time_lapse_gcode template stamps
         // blocks stTimelapse), but writes only skippable_part_time, which has no g-code-emitting
@@ -683,7 +728,7 @@ void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, P
                     // ORCA: Fix issue with flow rate changes being visualized incorrectly
                     const float mm3_per_mm = curr_move.mm3_per_mm;
                     const float fan_speed = curr_move.fan_speed;
-                    const float temperature = interpolate ? lerp(prev_move.temperature, curr_move.temperature, t) : curr_move.temperature;
+                    const float temperature = (interpolate && !piecewise_temperatures) ? lerp(prev_move.temperature, curr_move.temperature, t) : curr_move.temperature;
                     actual_speed_moves.push_back({
                         block.move_id,
                         position,
@@ -714,7 +759,7 @@ void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, P
                     // ORCA: Fix issue with flow rate changes being visualized incorrectly
                     const float mm3_per_mm = curr_move.mm3_per_mm;
                     const float fan_speed = curr_move.fan_speed;
-                    const float temperature = interpolate ? lerp(prev_move.temperature, curr_move.temperature, t) : curr_move.temperature;
+                    const float temperature = (interpolate && !piecewise_temperatures) ? lerp(prev_move.temperature, curr_move.temperature, t) : curr_move.temperature;
                     actual_speed_moves.push_back({
                         block.move_id,
                         position,
@@ -1941,6 +1986,15 @@ void GCodeProcessor::run_post_process()
         remap(m_machine_end_gcode_start_line_id);
     }
 
+    if (m_flow_timeline) {
+        auto remap = [&export_line](unsigned int id) { return export_line.remap_gcode_id(id); };
+        m_flow_timeline->remap_source_lines(remap);
+        for (auto& section : m_flow_sections) {
+            section.first_line = remap(section.first_line);
+            section.last_line = remap(section.last_line);
+        }
+    }
+
     if (rename_file(out_path, result_filename))
         // TRN %1% is the temporary file path, %2% the output file path.
         throw Slic3r::RuntimeError(Slic3r::format(_u8L("Failed to rename the output G-code file from %1% to %2%.\nIs %1% locked?"),
@@ -1956,6 +2010,103 @@ void GCodeProcessor::run_post_process()
 // (X1/P1/A1/H2S) never sets the flag, so it never enters this pass. The PreCoolingInjector (below)
 // fills the map; when the injector produces no lines (no idle windows / no usage blocks) the map is
 // empty and the pass is a byte-for-byte identity rewrite of the finished file.
+void GCodeProcessor::apply_adaptive_temperature_plan(const AdaptiveTemperaturePlan& plan,
+                                                         const std::function<std::string(int)>& format_temperature)
+{
+    if (!m_flow_timeline) throw std::logic_error("Adaptive temperature needs a collected timeline");
+    // A commanded firmware flow override is not part of the deposited-volume
+    // model. Reject it even in start scripts, rather than silently using wrong Q.
+    GCodeReader validation_reader;
+    validation_reader.parse_file(m_result.filename, [](GCodeReader&, const GCodeReader::GCodeLine& line) {
+        float value = 100.0f;
+        if (line.cmd_is("M200") || (line.cmd_is("M221") && line.has_value('S', value) && value != 100.0f))
+            throw Slic3r::InvalidArgument(_u8L("Adaptive nozzle temperature does not support firmware volumetric extrusion or a runtime flow override."));
+    });
+    if (plan.commands.empty()) return;
+    const std::string output_path = m_result.filename + ".adaptive_tmp";
+    std::vector<std::pair<unsigned int, unsigned int>> offsets;
+    auto targets = m_flow_timeline->temperature_targets();
+    std::vector<size_t> line_ends;
+    {
+        boost::nowide::ifstream input(m_result.filename, std::ios::binary);
+        boost::nowide::ofstream output(output_path, std::ios::binary | std::ios::trunc);
+        if (!input || !output) throw Slic3r::RuntimeError(_u8L("Could not open the adaptive temperature output file."));
+        std::string line;
+        unsigned int line_id = 0;
+        unsigned int added_lines = 0;
+        size_t bytes = 0;
+        size_t command = 0;
+        while (std::getline(input, line)) {
+            ++line_id;
+            if (command < plan.commands.size() && plan.commands[command].source_line < line_id)
+                throw std::logic_error("Adaptive temperature command lost its source line");
+            if (command < plan.commands.size() && plan.commands[command].source_line == line_id) {
+                const auto& event = plan.commands[command++];
+                const std::string text = format_temperature(event.temperature);
+                if (text.empty() || text.back() != '\n' || std::count(text.begin(), text.end(), '\n') != 1 ||
+                    !GCodeReader::GCodeLine::cmd_is(text, "M104"))
+                    throw std::logic_error("Adaptive temperature must emit one native nonblocking command");
+                output.write(text.data(), static_cast<std::streamsize>(text.size()));
+                bytes += text.size();
+                line_ends.push_back(bytes);
+                offsets.emplace_back(line_id, ++added_lines);
+                targets.push_back({line_id, static_cast<double>(event.temperature)});
+            }
+            output.write(line.data(), static_cast<std::streamsize>(line.size()));
+            bytes += line.size();
+            if (!input.eof()) { output.put('\n'); ++bytes; }
+            line_ends.push_back(bytes);
+        }
+        if (input.bad() || !output || command != plan.commands.size())
+            throw Slic3r::RuntimeError(_u8L("Failed to write the adaptive temperature plan."));
+        output.flush();
+        if (!output) throw Slic3r::RuntimeError(_u8L("Failed to flush the adaptive temperature output."));
+    }
+    if (rename_file(output_path, m_result.filename))
+        throw Slic3r::RuntimeError(_u8L("Could not replace the output with the adaptive temperature plan."));
+    auto remap = [&offsets](unsigned int id) {
+        const auto upper = std::upper_bound(offsets.begin(), offsets.end(), id,
+            [](unsigned int value, const auto& entry) { return value < entry.first; });
+        return id + (upper == offsets.begin() ? 0 : (upper - 1)->second);
+    };
+    std::stable_sort(targets.begin(), targets.end(), [](const auto& a, const auto& b) { return a.source_line < b.source_line; });
+    size_t target = 0;
+    float current = 0.0f;
+    for (auto& move : m_result.moves) {
+        while (target < targets.size() && targets[target].source_line <= move.gcode_id)
+            current = static_cast<float>(targets[target++].temperature);
+        move.temperature = current;
+        move.gcode_id = remap(move.gcode_id);
+    }
+    m_result.lines_ends = std::move(line_ends);
+    m_flow_timeline->remap_source_lines(remap);
+}
+
+void GCodeProcessor::replay_coordinated_flow(const std::function<void()>& cancel_callback)
+{
+    if (!m_print || !m_flow_timeline) throw std::logic_error("Coordinated flow replay needs an active print and timeline");
+    const auto sections = m_flow_sections;
+    const std::string filename = m_result.filename;
+    GCodeProcessorResult original;
+    original = std::move(m_result);
+    reset();
+    m_parser.reset();
+    m_flow_sections = sections;
+    // The raw export still contains native progress/time placeholders. Replay
+    // rebuilds acceleration, time, flow and preview before postprocessing once.
+    process_file(filename, cancel_callback);
+    if (sections.empty()) m_flow_timeline->apply_provenance({}, true);
+    original.moves = std::move(m_result.moves);
+    original.lines_ends = std::move(m_result.lines_ends);
+    original.print_statistics = std::move(m_result.print_statistics);
+    original.initial_layer_time = m_result.initial_layer_time;
+    original.skippable_part_time = std::move(m_result.skippable_part_time);
+    m_result = std::move(original);
+    // Geometry/mass/device metadata are unchanged; only time-dependent preview
+    // and statistics are replaced. Keep the new time engine for native export.
+    run_post_process();
+}
+
 void GCodeProcessor::run_second_pass_injection()
 {
     // The ordered map of M632/M400/M104/M633 lines to splice into the finished g-code, keyed on the
@@ -3786,6 +3937,10 @@ void GCodeProcessor::reset()
 
     m_result.reset();
     m_result.id = ++s_result_id;
+    if (m_flow_timeline)
+        m_flow_timeline->clear();
+    m_flow_sections.clear();
+    m_piecewise_temperatures = false;
 
     m_last_default_color_id = 0;
 
@@ -3932,6 +4087,10 @@ void GCodeProcessor::finalize(bool post_process)
     // Orca: final pass -- also drains any filament-change delay still buffered because
     // calculate_time early-returns with fewer than two queued blocks (see calculate_time).
     calculate_time(m_result, 0, 0.0f, EMoveType::Noop, /*is_final=*/true);
+    if (m_flow_timeline)
+        m_flow_timeline->finish(get_time(PrintEstimatedStatistics::ETimeMode::Normal));
+    if (m_flow_timeline && !m_flow_sections.empty())
+        m_flow_timeline->apply_provenance(m_flow_sections, true);
 
     // process the time blocks
     for (size_t i = 0; i < static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Count); ++i) {
@@ -6401,10 +6560,14 @@ void GCodeProcessor::process_M83(const GCodeReader::GCodeLine& line)
 
 void GCodeProcessor::process_M104(const GCodeReader::GCodeLine& line)
 {
+    if (line.comment().find("_ORCA_ADAPTIVE_TEMPERATURE") != std::string_view::npos)
+        m_piecewise_temperatures = true;
     int filament_id = get_filament_id();
     float new_temp;
-    if (line.has_value('S', new_temp))
+    if (line.has_value('S', new_temp)) {
         m_extruder_temps[filament_id] = new_temp;
+        if (m_flow_timeline) m_flow_timeline->note_temperature_target(m_line_id, new_temp);
+    }
 }
 
 void GCodeProcessor::process_VM104(const GCodeReader::GCodeLine& line)
@@ -6494,6 +6657,8 @@ void GCodeProcessor::process_M109(const GCodeReader::GCodeLine& line)
     }
     else if (line.has_value('S', new_temp))
         m_extruder_temps[filament_id] = new_temp;
+    if (m_flow_timeline && (line.has('S') || line.has('R')))
+        m_flow_timeline->note_temperature_target(m_line_id, new_temp);
 }
 
 void GCodeProcessor::process_VM109(const GCodeReader::GCodeLine& line)
@@ -7885,7 +8050,8 @@ void GCodeProcessor::calculate_time(GCodeProcessorResult& result, size_t keep_la
     for (size_t i = 0; i < static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Count); ++i) {
         TimeMachine& machine = m_time_processor.machines[i];
         machine.klipper = m_flavor == gcfKlipper;
-        machine.calculate_time(m_result, static_cast<PrintEstimatedStatistics::ETimeMode>(i), keep_last_n_blocks, additional_time, target_move_type, is_final);
+        FlowTimeline* timeline = (i == static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Normal) && m_flow_timeline) ? &*m_flow_timeline : nullptr;
+        machine.calculate_time(m_result, static_cast<PrintEstimatedStatistics::ETimeMode>(i), keep_last_n_blocks, additional_time, target_move_type, is_final, timeline, m_piecewise_temperatures);
         if (static_cast<PrintEstimatedStatistics::ETimeMode>(i) == PrintEstimatedStatistics::ETimeMode::Normal)
             actual_speed_moves = std::move(machine.actual_speed_moves);
     }

@@ -11,6 +11,7 @@
 #include "libslic3r/ExPolygon.hpp"
 #include <string>
 #include "libslic3r/CustomGCode.hpp"
+#include "libslic3r/InterlayerAdhesionCalibration.hpp"
 #include <cstdio>
 #include "slic3r/GUI/ImGuiWrapper.hpp"
 #include "libslic3r/Utils.hpp"
@@ -282,6 +283,7 @@ void IMSlider::SetTicksValues(const Info &custom_gcode_per_print_z)
 
     m_ticks.ticks.clear();
     const std::vector<CustomGCode::Item> &heights = custom_gcode_per_print_z.gcodes;
+    const bool calibration_schedule = adhesion_has_height_map(custom_gcode_per_print_z);
     for (auto h : heights) {
         int tick = get_tick_from_value(h.print_z, true);
         if (tick >= 0) m_ticks.ticks.emplace(TickCode{tick, h.type, h.extruder, h.color, h.extra});
@@ -297,7 +299,9 @@ void IMSlider::SetTicksValues(const Info &custom_gcode_per_print_z)
 
     if (last_spiral_vase_status != m_is_spiral_vase) {
         last_spiral_vase_status = m_is_spiral_vase;
-        if (!m_ticks.empty()) {
+        // Calibration uses nonblocking M104 height events that are valid in spiral mode.
+        // Clearing them on the first vase preview posts a schedule edit and triggers another slice.
+        if (!m_ticks.empty() && !calibration_schedule) {
             m_ticks.ticks.clear();
             post_ticks_changed_event();
         }
@@ -309,7 +313,7 @@ void IMSlider::SetTicksValues(const Info &custom_gcode_per_print_z)
 
     //    return false;
     //};
-    if ((!m_ticks.empty() /*&& has_tick_execpt(PausePrint)*/) && m_draw_mode == dmSequentialFffPrint) {
+    if ((!m_ticks.empty() /*&& has_tick_execpt(PausePrint)*/) && m_draw_mode == dmSequentialFffPrint && !calibration_schedule) {
         for (auto it{ m_ticks.ticks.begin() }, end{ m_ticks.ticks.end() }; it != end;) {
             if (true/*it->type != PausePrint*/)
                 it = m_ticks.ticks.erase(it);

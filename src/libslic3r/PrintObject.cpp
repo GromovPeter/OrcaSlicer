@@ -1494,6 +1494,8 @@ bool PrintObject::invalidate_state_by_config_options(
         } else if (
             opt_key == "small_area_infill_flow_compensation_model") {
             steps.emplace_back(posSlice);
+        } else if (opt_key == "msao_recovery_enable" || opt_key == "msao_safe_accel" || opt_key == "msao_safe_velocity") {
+            invalidated |= m_print->invalidate_step(psGCodeExport);
         } else if (opt_key == "gap_infill_speed"
             || opt_key == "filter_out_gap_fill" ) {
             // Return true if gap-fill speed has changed from zero value to non-zero or from non-zero value to zero.

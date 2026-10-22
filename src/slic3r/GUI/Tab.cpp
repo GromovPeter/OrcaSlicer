@@ -3080,6 +3080,9 @@ void TabPrint::build()
         optgroup->append_single_option_line("travel_jerk", "speed_settings_jerk_xy#travel", 0);
 
         optgroup = page->new_optgroup(L("Advanced"), L"param_advanced", 15);
+        optgroup->append_single_option_line("msao_recovery_enable", "speed_settings_advanced");
+        optgroup->append_single_option_line("msao_safe_accel", "speed_settings_advanced");
+        optgroup->append_single_option_line("msao_safe_velocity", "speed_settings_advanced");
         optgroup->append_single_option_line("max_volumetric_extrusion_rate_slope", "speed_settings_advanced");
         optgroup->append_single_option_line("max_volumetric_extrusion_rate_slope_segment_length", "speed_settings_advanced");
         optgroup->append_single_option_line("extrusion_rate_smoothing_external_perimeter_only", "speed_settings_advanced#apply-only-on-external-features");
@@ -3361,6 +3364,8 @@ void TabPrint::toggle_options()
         m_config_manipulation.set_is_BBL_Printer(is_BBL_printer);
     }
 
+    toggle_option("msao_safe_accel", m_config->opt_bool("msao_recovery_enable"));
+    toggle_option("msao_safe_velocity", m_config->opt_bool("msao_recovery_enable"));
     m_config_manipulation.toggle_print_fff_options(m_config, int(intptr_t(m_extruder_switch->GetClientData())), m_type < Preset::TYPE_COUNT);
 
     if (m_type == Preset::TYPE_PLATE) {
@@ -4623,6 +4628,11 @@ void TabFilament::build()
         line.append_option(optgroup->get_option("nozzle_temperature", 0));
         optgroup->append_line(line);
 
+        optgroup = page->new_optgroup(L("Adaptive nozzle temperature"));
+        optgroup->append_single_option_line("filament_adaptive_temperature", "", 0);
+        optgroup->append_single_option_line("filament_coordinated_temperature", "", 0);
+        optgroup->append_single_option_line("filament_flow_temperature_table", "", 0);
+
         optgroup = page->new_optgroup(L("Bed temperature"), L"param_bed_temp");
         line = { L("Cool Plate (SuperTack)"),
                  L("Bed temperature when the Cool Plate SuperTack is installed. A value of 0 means the filament does not support printing on the Cool Plate SuperTack.") };
@@ -5016,6 +5026,9 @@ void TabFilament::toggle_options()
         // Orca: adaptive pressure advance and calibration model
         // If PA is not enabled, disable adaptive pressure advance and hide the model section
         // If adaptive PA is not enabled, hide the adaptive PA model section
+        toggle_option("nozzle_temperature", !m_config->opt_bool("filament_adaptive_temperature", variant_index), 0);
+        toggle_option("filament_flow_temperature_table", m_config->opt_bool("filament_adaptive_temperature", variant_index), 0);
+        toggle_option("filament_coordinated_temperature", m_config->opt_bool("filament_adaptive_temperature", variant_index), 0);
         toggle_option("adaptive_pressure_advance", pa, 0);
         toggle_option("adaptive_pressure_advance_overhangs", pa, 0);
         bool has_adaptive_pa = m_config->opt_bool("adaptive_pressure_advance", variant_index);
@@ -5257,6 +5270,15 @@ void TabPrinter::build_fff()
         // todo: for multi_extruder test
         optgroup->append_single_option_line("z_offset", "printer_basic_information_printable_space#z-offset");
         optgroup->append_single_option_line("preferred_orientation", "printer_basic_information_printable_space#preferred-orientation");
+
+        optgroup = page->new_optgroup(L("Adaptive nozzle temperature"));
+        optgroup->append_single_option_line("adaptive_temperature_rise_time");
+        optgroup->append_single_option_line("adaptive_temperature_fall_time");
+        optgroup->append_single_option_line("adaptive_temperature_smoothing_period");
+        optgroup->append_single_option_line("adaptive_temperature_min_print_speed");
+        optgroup->append_single_option_line("adaptive_temperature_lead_time");
+        optgroup->append_single_option_line("adaptive_temperature_min_interval");
+        optgroup->append_single_option_line("adaptive_temperature_step");
 
         optgroup = page->new_optgroup(L("Advanced"), L"param_advanced");
 

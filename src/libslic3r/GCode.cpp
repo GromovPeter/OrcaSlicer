@@ -1,3 +1,4 @@
+#include "InterlayerAdhesionCalibration.hpp"
 #include "ArcFitter.hpp"
 #include "BoundingBox.hpp"
 #include "Circle.hpp"
@@ -10,6 +11,8 @@
 #include "GCode/PressureEqualizer.hpp"
 #include "GCode/SmallAreaInfillFlowCompensator.hpp"
 #include "GCode/CoolingBuffer.hpp"
+#include "GCode/AppearanceUnderExtrusionAccelRecoveryFilter.hpp"
+#include <unordered_map>
 #include "GCode/AdaptivePAProcessor.hpp"
 #include "CustomGCode.hpp"
 #include "GCode/TimelapsePosPicker.hpp"
@@ -31,6 +34,10 @@
 #include "I18N.hpp"
 #include "IMEXHelpers.hpp"
 #include "GCode.hpp"
+#include "GCode/GCodeProvenance.hpp"
+#include "GCode/AdaptiveTemperaturePlanner.hpp"
+#include "GCode/AdaptiveFlowPlanner.hpp"
+#include "GCode/AdaptiveTemperatureReport.hpp"
 #include <cstdio>
 #include "Exception.hpp"
 #include "LifecycleEvents.hpp"
@@ -2804,9 +2811,31 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
     std::string path_tmp(path);
     path_tmp += ".tmp";
 
+    const auto adhesion_plan = adhesion_plan_from_codes(print->model().get_curr_plate_custom_gcodes());
+    if (adhesion_plan) validate_adhesion_project(print->model(), print->full_print_config(), *adhesion_plan);
+    m_adaptive_provenance.reset();
+    const auto adaptive_used = print->get_slice_used_filaments(false);
+    bool adaptive_enabled = false;
+    bool coordinated_flow = false;
+    for (int id : adaptive_used) {
+        const size_t index = print->get_filament_config_indx(id, 0, false);
+        if (print->config().filament_adaptive_temperature.get_at(index)) {
+            adaptive_enabled = true;
+            coordinated_flow = print->config().filament_coordinated_temperature.get_at(index);
+            m_adaptive_filament = static_cast<unsigned int>(id);
+        }
+    }
+    if (adaptive_enabled) {
+        if (adaptive_used.size() != 1 || print->config().nozzle_diameter.size() != 1 ||
+            print->config().gcode_flavor != gcfKlipper || print->config().print_sequence != PrintSequence::ByLayer ||
+            print->config().spiral_mode || print->config().belt_printer || !print->config().post_process.values.empty())
+            throw Slic3r::InvalidArgument(_(L("Adaptive nozzle temperature currently requires one material, one Klipper hotend, layer-by-layer printing, and no external postprocessing.")));
+        m_adaptive_provenance = std::make_shared<GCodeProvenance>();
+    }
+    m_processor.enable_flow_timeline(adaptive_enabled || adhesion_plan.has_value());
     m_processor.initialize(path_tmp);
     m_processor.set_print(print);
-    GCodeOutputStream file(boost::nowide::fopen(path_tmp.c_str(), "wb"), m_processor);
+    GCodeOutputStream file(boost::nowide::fopen(path_tmp.c_str(), "wb"), m_processor, m_adaptive_provenance.get());
     if (! file.is_open()) {
         // TRN %1% is a file path.
         std::string err_msg = Slic3r::format(_(L("G-code export to %1% failed.\nCannot open the file for writing.")), path) + "\n";
@@ -2929,7 +2958,77 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
     // single-nozzle prints, where the injector is gated off anyway (enable_pre_heating false).
     m_processor.result().nozzle_group_result = m_print->get_layered_nozzle_group_result();
 
-    m_processor.finalize(true);
+    if (m_adaptive_provenance) m_processor.set_flow_provenance(m_adaptive_provenance->sections());
+    m_processor.finalize(!coordinated_flow);
+    if (adhesion_plan) validate_adhesion_flow(*m_processor.flow_timeline(), *adhesion_plan);
+    if (m_adaptive_provenance) {
+        if (m_adaptive_provenance->sections().empty())
+            m_processor.flow_timeline()->apply_provenance({}, true);
+        auto* timeline = m_processor.flow_timeline();
+        unsigned int first_adaptive_line = 0;
+        for (const auto& interval : timeline->intervals())
+            if (interval.motion.layer_id > 1 && !interval.motion.protected_region && interval.motion.source_line != 0) {
+                first_adaptive_line = interval.motion.source_line;
+                break;
+            }
+        // Validate original (pre-rewrite) semantic regions before scheduling. The
+        // processor has already remapped its own copy for final-file insertion.
+        for (const auto& section : m_adaptive_provenance->sections()) {
+            if (section.unknown_runtime_command && section.kind != GCodeSectionKind::MachineStart &&
+                section.kind != GCodeSectionKind::MachineEnd && section.kind != GCodeSectionKind::FilamentStart &&
+                section.kind != GCodeSectionKind::FilamentEnd && first_adaptive_line != 0)
+                throw Slic3r::InvalidArgument(_(L("Adaptive nozzle temperature cannot model a custom runtime macro in this print. Disable the feature or remove the macro.")));
+        }
+        const size_t fi = get_filament_config_index(static_cast<int>(m_adaptive_filament));
+        AdaptiveTemperatureSettings settings;
+        settings.table = parse_flow_temperature_table(m_config.filament_flow_temperature_table.get_at(fi));
+        settings.minimum_temperature = m_config.nozzle_temperature_range_low.get_at(fi);
+        settings.maximum_temperature = m_config.nozzle_temperature_range_high.get_at(fi);
+        settings.rise_time = m_config.adaptive_temperature_rise_time;
+        settings.fall_time = m_config.adaptive_temperature_fall_time;
+        settings.smoothing_period = m_config.adaptive_temperature_smoothing_period;
+        settings.additional_lead_time = m_config.adaptive_temperature_lead_time;
+        settings.minimum_command_interval = m_config.adaptive_temperature_min_interval;
+        settings.temperature_step = m_config.adaptive_temperature_step;
+        AdaptiveTemperatureReport report;
+        report.coordinated = coordinated_flow;
+        report.original_time = m_processor.get_time(PrintEstimatedStatistics::ETimeMode::Normal);
+        bool flow_boundary_limited = false;
+        if (coordinated_flow) {
+            const auto feedrates = read_adaptive_flow_feedrates(path_tmp);
+            const auto flow_plan = plan_adaptive_flow(*timeline, feedrates, settings, m_config.adaptive_temperature_min_print_speed);
+            flow_boundary_limited = flow_plan.limited_by_boundary;
+            report.slowed_moves = flow_plan.commands.size();
+            report.issues = flow_plan.issues;
+            write_adaptive_flow_plan(path_tmp, flow_plan);
+            m_processor.replay_coordinated_flow([this]() { m_print->throw_if_canceled(); });
+            timeline = m_processor.flow_timeline();
+            settings.deposition_time_only = true;
+        }
+        const auto plan = plan_adaptive_temperature(*timeline, settings);
+        report.planned_time = m_processor.get_time(PrintEstimatedStatistics::ETimeMode::Normal);
+        report.commands = plan.commands.size();
+        report.constrained = plan.limited_by_transition || flow_boundary_limited;
+        report.issues.insert(report.issues.end(), plan.issues.begin(), plan.issues.end());
+        auto include_target = [&](double target) {
+            if (!report.has_target_range) { report.minimum_target = report.maximum_target = target; report.has_target_range = true; }
+            else { report.minimum_target = std::min(report.minimum_target, target); report.maximum_target = std::max(report.maximum_target, target); }
+        };
+        for (const auto& interval : timeline->intervals())
+            if (!interval.motion.protected_region && interval.motion.layer_id > 1 && interval.motion.heater_id == 0)
+                include_target(interval.motion.target_temperature);
+        for (const auto& command : plan.commands) include_target(command.temperature);
+        m_processor.apply_adaptive_temperature_plan(plan, [this](int temperature) {
+            return GCodeWriter::set_temperature(static_cast<unsigned int>(temperature), m_writer.config.gcode_flavor, false, -1, "_ORCA_ADAPTIVE_TEMPERATURE");
+        });
+        append_adaptive_temperature_report(path_tmp, report, m_processor.result().lines_ends);
+        if (coordinated_flow && (plan.limited_by_transition || flow_boundary_limited))
+            print->active_step_add_warning(PrintStateBase::WarningLevel::NON_CRITICAL,
+                _(L("Some thermal transitions remain constrained by protected regions, bridge speeds, minimum print speed or motion boundaries. Coordinated flow limits were applied; see View > Adaptive temperature report.")));
+        else if (plan.limited_by_transition)
+            print->active_step_add_warning(PrintStateBase::WarningLevel::NON_CRITICAL,
+                _(L("Some adaptive temperature transitions need more time than the available motion boundaries allow. Printing speeds are unchanged. See View > Adaptive temperature report.")));
+    }
 //    DoExport::update_print_estimated_times_stats(m_processor, print->m_print_statistics);
     DoExport::update_print_estimated_stats(m_processor, m_writer.extruders(), print->m_print_statistics, print->config());
     // Printed-mass safety check. Flushed filament leaves the bed, so subtract it
@@ -5044,23 +5143,35 @@ void GCode::process_layers(
         this->m_spiral_vase->set_max_xy_smoothing(max_xy_smoothing);
     }
     const auto spiral_mode = tbb::make_filter<LayerResult, LayerResult>(slic3r_tbb_filtermode::serial_in_order,
-        [&spiral_mode = *this->m_spiral_vase.get(), &layers_to_print](LayerResult in) -> LayerResult {
+        [&spiral_mode = *this->m_spiral_vase.get(), &layers_to_print,
+         calibration = adhesion_plan_from_codes(print.model().get_curr_plate_custom_gcodes()).has_value()](LayerResult in) -> LayerResult {
         	if (in.nop_layer_result)
                 return in;
                 
             spiral_mode.enable(in.spiral_vase_enable);
-            bool last_layer = in.layer_id == layers_to_print.size() - 1;
+            // A calibration must finish at its measured flow, without the normal vase taper-out loop.
+            bool last_layer = !calibration && in.layer_id == layers_to_print.size() - 1;
             return { spiral_mode.process_layer(std::move(in.gcode), last_layer), in.layer_id, in.spiral_vase_enable, in.cooling_buffer_flush};
         });
     const auto pressure_equalizer = tbb::make_filter<LayerResult, LayerResult>(slic3r_tbb_filtermode::serial_in_order,
         [pressure_equalizer = this->m_pressure_equalizer.get()](LayerResult in) -> LayerResult {
             return pressure_equalizer->process_layer(std::move(in));
         });
+    std::unordered_map<int, AppearanceUnderExtrusionAccelRecoveryFilter::ObjectParams> recovery_objects;
+    for (const PrintObject* object : print.objects()) {
+        const auto& c = object->config();
+        recovery_objects.emplace(object->get_id(),
+            AppearanceUnderExtrusionAccelRecoveryFilter::ObjectParams{c.msao_recovery_enable.value,
+                static_cast<float>(c.msao_safe_accel.value), static_cast<float>(c.msao_safe_velocity.value)});
+    }
+    AppearanceUnderExtrusionAccelRecoveryFilter recovery(print.config(), print.default_object_config(),
+        std::move(recovery_objects), m_writer.get_gcode_flavor());
     const auto cooling = tbb::make_filter<LayerResult, std::string>(slic3r_tbb_filtermode::serial_in_order,
-        [&cooling_buffer = *this->m_cooling_buffer.get()](LayerResult in) -> std::string {
+        [&cooling_buffer = *this->m_cooling_buffer.get(), &recovery](LayerResult in) -> std::string {
         	if (in.nop_layer_result)
                 return in.gcode;
-            return cooling_buffer.process_layer(std::move(in.gcode), in.layer_id, in.cooling_buffer_flush);
+            in.gcode = cooling_buffer.process_layer(std::move(in.gcode), in.layer_id, in.cooling_buffer_flush);
+            return recovery.process_layer(std::move(in)).gcode;
         });
     const auto pa_processor_filter = tbb::make_filter<std::string, std::string>(slic3r_tbb_filtermode::serial_in_order,
             [&pa_processor = *this->m_pa_processor](std::string in) -> std::string {
@@ -5141,22 +5252,34 @@ void GCode::process_layers(
         this->m_spiral_vase->set_max_xy_smoothing(max_xy_smoothing);
     }
     const auto spiral_mode = tbb::make_filter<LayerResult, LayerResult>(slic3r_tbb_filtermode::serial_in_order,
-        [&spiral_mode = *this->m_spiral_vase.get(), &layers_to_print](LayerResult in)->LayerResult {
+        [&spiral_mode = *this->m_spiral_vase.get(), &layers_to_print,
+         calibration = adhesion_plan_from_codes(print.model().get_curr_plate_custom_gcodes()).has_value()](LayerResult in)->LayerResult {
             if (in.nop_layer_result)
                 return in;
             spiral_mode.enable(in.spiral_vase_enable);
-            bool last_layer = in.layer_id == layers_to_print.size() - 1;
+            // A calibration must finish at its measured flow, without the normal vase taper-out loop.
+            bool last_layer = !calibration && in.layer_id == layers_to_print.size() - 1;
             return { spiral_mode.process_layer(std::move(in.gcode), last_layer), in.layer_id, in.spiral_vase_enable, in.cooling_buffer_flush };
         });
     const auto pressure_equalizer = tbb::make_filter<LayerResult, LayerResult>(slic3r_tbb_filtermode::serial_in_order,
         [pressure_equalizer = this->m_pressure_equalizer.get()](LayerResult in) -> LayerResult {
              return pressure_equalizer->process_layer(std::move(in));
         });
+    std::unordered_map<int, AppearanceUnderExtrusionAccelRecoveryFilter::ObjectParams> recovery_objects;
+    for (const PrintObject* object : print.objects()) {
+        const auto& c = object->config();
+        recovery_objects.emplace(object->get_id(),
+            AppearanceUnderExtrusionAccelRecoveryFilter::ObjectParams{c.msao_recovery_enable.value,
+                static_cast<float>(c.msao_safe_accel.value), static_cast<float>(c.msao_safe_velocity.value)});
+    }
+    AppearanceUnderExtrusionAccelRecoveryFilter recovery(print.config(), print.default_object_config(),
+        std::move(recovery_objects), m_writer.get_gcode_flavor());
     const auto cooling = tbb::make_filter<LayerResult, std::string>(slic3r_tbb_filtermode::serial_in_order,
-        [&cooling_buffer = *this->m_cooling_buffer.get()](LayerResult in)->std::string {
+        [&cooling_buffer = *this->m_cooling_buffer.get(), &recovery](LayerResult in)->std::string {
             if (in.nop_layer_result)
                 return in.gcode;
-            return cooling_buffer.process_layer(std::move(in.gcode), in.layer_id, in.cooling_buffer_flush);
+            in.gcode = cooling_buffer.process_layer(std::move(in.gcode), in.layer_id, in.cooling_buffer_flush);
+            return recovery.process_layer(std::move(in)).gcode;
         });
     const auto pa_processor_filter = tbb::make_filter<std::string, std::string>(slic3r_tbb_filtermode::serial_in_order,
         [&pa_processor = *this->m_pa_processor](std::string in) -> std::string {
@@ -5266,6 +5389,20 @@ PlaceholderParserIntegration &ppi = m_placeholder_parser_integration;
             }
         }
 
+        if (m_print != nullptr && std::any_of(m_print->objects().begin(), m_print->objects().end(), [](const PrintObject* object) {
+                return object->config().msao_recovery_enable.value;
+            }))
+            output = ";_ORCA_AUE_CUSTOM_BEGIN\n" + output +
+                (output.empty() || output.back() == '\n' ? "" : "\n") + ";_ORCA_AUE_CUSTOM_END\n";
+        if (m_adaptive_provenance) {
+            auto kind = GCodeSectionKind::Custom;
+            if (name == "machine_start_gcode" || name == "file_start_gcode") kind = GCodeSectionKind::MachineStart;
+            else if (name == "machine_end_gcode") kind = GCodeSectionKind::MachineEnd;
+            else if (name == "filament_start_gcode") kind = GCodeSectionKind::FilamentStart;
+            else if (name == "filament_end_gcode") kind = GCodeSectionKind::FilamentEnd;
+            else if (name == "layer_change_gcode" || name == "before_layer_change_gcode") kind = GCodeSectionKind::LayerChange;
+            output = m_adaptive_provenance->wrap(std::move(output), kind);
+        }
         return output;
     } 
     catch (std::runtime_error &err) 
@@ -6786,8 +6923,14 @@ LayerResult GCode::process_layer(
                     // In single extruder multi material mode, set the temperature for the current extruder only.
                     continue;
                 size_t fi = get_filament_config_index((int)extruder.id());
-                int temperature = print.config().nozzle_temperature.get_at(fi);
-                if (temperature > 0 && temperature != print.config().nozzle_temperature_initial_layer.get_at(fi))
+                // Adaptive planning must enter from the first-layer target, never
+                // jump through the ordinary Other layers temperature. Keep an explicit
+                // anchor for startup macros whose heater state the parser cannot know.
+                int temperature = m_adaptive_provenance ?
+                    print.config().nozzle_temperature_initial_layer.get_at(fi) :
+                    print.config().nozzle_temperature.get_at(fi);
+                if (temperature > 0 && (m_adaptive_provenance ||
+                    temperature != print.config().nozzle_temperature_initial_layer.get_at(fi)))
                     gcode += m_writer.set_temperature(temperature, false, extruder.id());
             }
         }
@@ -7470,6 +7613,11 @@ LayerResult GCode::process_layer(
                     instance_to_print.print_object.slicing_parameters().raft_layers() == layer_to_print.object_layer->id();
                 m_config.apply(print.default_region_config());
                 m_config.apply(instance_to_print.print_object.config(), true);
+                // Recovery settings may differ by object, even with object labels disabled.
+                if (std::any_of(print.objects().begin(), print.objects().end(), [](const PrintObject* object) {
+                    return object->config().msao_recovery_enable.value;
+                }))
+                    gcode += "; OBJECT_ID: " + std::to_string(instance_to_print.print_object.get_id()) + "\n";
                 m_layer = layer_to_print.layer();
                 m_object_layer_over_raft = object_layer_over_raft;
                 if (m_config.reduce_crossing_wall)
@@ -8891,6 +9039,13 @@ bool GCode::GCodeOutputStream::is_error() const
 
 void GCode::GCodeOutputStream::flush()
 {
+    if (m_provenance) {
+        const std::string tail = m_provenance->finish();
+        if (!tail.empty()) {
+            fwrite(tail.data(), 1, tail.size(), this->f);
+            m_processor.process_buffer(tail);
+        }
+    }
     ::fflush(this->f);
 }
 
@@ -8905,7 +9060,9 @@ void GCode::GCodeOutputStream::close()
 void GCode::GCodeOutputStream::write(const char *what)
 {
     if (what != nullptr) {
-        const char* gcode = what;
+        std::string cleaned;
+        if (m_provenance) cleaned = m_provenance->consume(what);
+        const char* gcode = m_provenance ? cleaned.c_str() : what;
         // writes string to file
         fwrite(gcode, 1, ::strlen(gcode), this->f);
         //FIXME don't allocate a string, maybe process a batch of lines?

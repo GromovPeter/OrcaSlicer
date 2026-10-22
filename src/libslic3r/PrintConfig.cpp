@@ -3568,6 +3568,90 @@ void PrintConfigDef::init_fff_params()
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionFloats { 0. });
 
+    def = this->add("filament_adaptive_temperature", coBools);
+    def->label = L("Enable adaptive nozzle temperature");
+    def->tooltip = L("Adjust the commanded nozzle temperature to the planned volumetric flow. Experimental: one material and one Klipper hotend. The first layer and custom G-code remain protected. Other layers nozzle temperature is ignored; the adaptive target starts from the first-layer temperature and follows the flow/temperature table within the target rise/fall limits. Printing speeds are preserved unless coordinated flow is enabled.");
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionBools{false});
+
+    def = this->add("filament_coordinated_temperature", coBools);
+    def->label = L("Coordinate flow with nozzle temperature");
+    def->tooltip = L("Experimental: lower printing feedrates in advance to smooth nominal flow according to the target rise/fall settings. Requires adaptive nozzle temperature and a strictly increasing flow/temperature table. Preserves geometry, extrusion amount, travel and bridge speeds. May substantially increase print time; does not guarantee measured nozzle or melt temperature.");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionBools{false});
+
+    def = this->add("adaptive_temperature_min_print_speed", coFloat);
+    def->label = L("Minimum coordinated print speed");
+    def->tooltip = L("Lower limit for additional thermal slowdown. Already slower source moves and bridge speeds are retained. If this floor prevents a thermal transition, a warning remains. Does not change the cooling minimum speed setting.");
+    def->sidetext = "mm/s";
+    def->min = 0.1;
+    def->max = 100;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(5));
+
+    def = this->add("filament_flow_temperature_table", coStrings);
+    def->label = L("Flow / temperature table");
+    def->tooltip = L("Enter one flow and temperature pair per row: flow in mm³/s, temperature in °C. For example: 1, 232. Flows must increase and temperatures must stay inside the material's recommended nozzle temperature range. This example is not a calibrated material profile.");
+    def->mode = comSimple;
+    def->multiline = true;
+    def->full_width = true;
+    def->height = 5;
+    def->set_default_value(new ConfigOptionStrings{""});
+
+    def = this->add("adaptive_temperature_rise_time", coFloat);
+    def->label = L("Target rise time");
+    def->tooltip = L("Minimum time per degree when increasing the commanded temperature. This limits target changes; it is not a measured hotend heating rate.");
+    def->sidetext = "s/°C";
+    def->min = 0.1;
+    def->max = 120;
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionFloat(2));
+
+    def = this->add("adaptive_temperature_fall_time", coFloat);
+    def->label = L("Target fall time");
+    def->tooltip = L("Minimum time per degree when decreasing the commanded temperature. This limits target changes; it is not a measured hotend cooling rate.");
+    def->sidetext = "s/°C";
+    def->min = 0.1;
+    def->max = 120;
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionFloat(3));
+
+    def = this->add("adaptive_temperature_smoothing_period", coFloat);
+    def->label = L("Flow smoothing period");
+    def->tooltip = L("Time window for smoothing short flow changes, including alternating inner and outer walls. Does not change motion acceleration.");
+    def->sidetext = "s";
+    def->min = 0;
+    def->max = 120;
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionFloat(5));
+
+    def = this->add("adaptive_temperature_lead_time", coFloat);
+    def->label = L("Additional temperature lead time");
+    def->tooltip = L("Additional lookahead beyond the transition planned from the target rise time. Does not guarantee the measured nozzle temperature.");
+    def->sidetext = "s";
+    def->min = 0;
+    def->max = 120;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(0));
+
+    def = this->add("adaptive_temperature_min_interval", coFloat);
+    def->label = L("Minimum temperature command interval");
+    def->tooltip = L("Minimum interval between adaptive temperature commands. Commands are emitted only at existing motion boundaries.");
+    def->sidetext = "s";
+    def->min = 0.1;
+    def->max = 120;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(2));
+
+    def = this->add("adaptive_temperature_step", coInt);
+    def->label = L("Temperature command step");
+    def->tooltip = L("Size of an adaptive target change. The planner respects this step, the rise and fall times, and the minimum command interval together.");
+    def->sidetext = "°C";
+    def->min = 1;
+    def->max = 5;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionInt(1));
+
     def = this->add("filament_settings_id", coStrings);
     def->set_default_value(new ConfigOptionStrings { "" });
     //BBS: open this option to command line
@@ -5550,6 +5634,30 @@ void PrintConfigDef::init_fff_params()
     def->min = 0;
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionFloats { 0. });
+
+    def = this->add("msao_recovery_enable", coBool);
+    def->label = L("Under-extrusion recovery after overhangs (Beta)");
+    def->tooltip = L("Temporarily limits speed and acceleration when an outer wall resumes faster printing after continuous slow extrusion. Klipper only. Cannot be combined with Extrusion rate smoothing. Disabled on the first layer and in spiral vase mode.");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionBool(false));
+
+    def = this->add("msao_safe_accel", coFloat);
+    def->label = L("Safe acceleration after overhangs (Beta)");
+    def->tooltip = L("Maximum acceleration during local under-extrusion recovery. Existing lower acceleration limits are retained.");
+    def->sidetext = L(u8"mm/s²");
+    def->min = 1;
+    def->max = 100000;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(200));
+
+    def = this->add("msao_safe_velocity", coFloat);
+    def->label = L("Safe speed after overhangs (Beta)");
+    def->tooltip = L("Maximum speed during local under-extrusion recovery. Existing lower speed limits are retained. Recovery length follows the acceleration distance, with a short transition and cruise section.");
+    def->sidetext = L("mm/s");
+    def->min = 1;
+    def->max = 1000;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(50));
 
     def = this->add("max_volumetric_extrusion_rate_slope", coFloat);
     def->label = L("Extrusion rate smoothing");
@@ -10100,6 +10208,8 @@ std::set<std::string> filament_options_with_variant = {
     "pressure_advance",
     "adaptive_pressure_advance",
     "adaptive_pressure_advance_model",
+    "filament_adaptive_temperature",
+    "filament_flow_temperature_table",
     "adaptive_pressure_advance_overhangs",
     "adaptive_pressure_advance_bridges",
     // Orca: cooling fans, multi-tool ramming and recommended nozzle temperature range

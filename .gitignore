@@ -55,3 +55,7 @@ __pycache__/
 /.test/
 docs/superpowers/
 ctest_results.xml
+
+# Generated internal calibration worker copies (canonical files: scripts/).
+/resources/calibration/*.py
+/resources/calibration/__pycache__/

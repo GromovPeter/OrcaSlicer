@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Orca Slicer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-19 09:48-0300\n"
+"POT-Creation-Date: 2026-10-22 09:29+0300\n"
 "PO-Revision-Date: 2025-10-02 17:43+0700\n"
 "Last-Translator: \n"
 "Language-Team: hainguyen.ts13@gmail.com\n"
@@ -7188,6 +7188,12 @@ msgstr "Tải lên model"
 msgid "Download Models"
 msgstr "Tải xuống model"
 
+msgid "Adaptive temperature report"
+msgstr ""
+
+msgid "Show the adaptive temperature report for the current plate"
+msgstr ""
+
 msgid "Default View"
 msgstr "Chế độ xem mặc định"
 
@@ -7507,6 +7513,18 @@ msgstr "Input Shaping"
 
 msgid "VFA"
 msgstr "VFA"
+
+msgid "Interlayer adhesion / temperature"
+msgstr ""
+
+msgid "Create a continuous-flow cylinder and a temperature-to-height map"
+msgstr ""
+
+msgid "Hotend thermal response"
+msgstr ""
+
+msgid "Analyze a recorded hotend thermal response CSV"
+msgstr ""
 
 # AI Translated
 msgid "Calibration Guide"
@@ -13145,6 +13163,9 @@ msgstr "Nhiệt độ in"
 msgid "Nozzle temperature when printing"
 msgstr "Nhiệt độ đầu phun khi in"
 
+msgid "Adaptive nozzle temperature"
+msgstr ""
+
 msgid "Bed temperature when the Cool Plate SuperTack is installed. A value of 0 means the filament does not support printing on the Cool Plate SuperTack."
 msgstr "Nhiệt độ bàn khi bản Cool SuperTack được lắp. Giá trị 0 có nghĩa là filament không hỗ trợ in trên bản Cool SuperTack."
 
@@ -14743,6 +14764,9 @@ msgstr "G-code đổi vai trò đùn (process)"
 msgid "Filament change extrusion role G-code"
 msgstr "G-code đổi vai trò đùn (filament)"
 
+msgid "Adaptive nozzle temperature currently requires one material, one Klipper hotend, layer-by-layer printing, and no external postprocessing."
+msgstr ""
+
 # AI Translated
 #. TRN %1% is a file path.
 #, boost-format
@@ -14768,6 +14792,15 @@ msgid ""
 msgstr ""
 "Xuất G-code ra %1% thất bại.\n"
 "Ổ đĩa có bị đầy không?"
+
+msgid "Adaptive nozzle temperature cannot model a custom runtime macro in this print. Disable the feature or remove the macro."
+msgstr ""
+
+msgid "Some thermal transitions remain constrained by protected regions, bridge speeds, minimum print speed or motion boundaries. Coordinated flow limits were applied; see View > Adaptive temperature report."
+msgstr ""
+
+msgid "Some adaptive temperature transitions need more time than the available motion boundaries allow. Printing speeds are unchanged. See View > Adaptive temperature report."
+msgstr ""
 
 # AI Translated
 #. TRN %1% is the temporary file path, %2% the output file path, %3% the system error message.
@@ -15139,6 +15172,12 @@ msgstr "Nếu bạn vẫn muốn in, bạn có thể bật tùy chọn trong Tù
 
 msgid "No extrusions under current settings."
 msgstr "Không có đùn dưới cài đặt hiện tại."
+
+msgid "Under-extrusion recovery after overhangs currently requires Klipper."
+msgstr ""
+
+msgid "Disable Extrusion rate smoothing before enabling under-extrusion recovery after overhangs."
+msgstr ""
 
 # AI Translated
 msgid "Mixed filaments are not supported in IDEX/IQEX parallel modes. Switch this plate to Primary mode."
@@ -17546,6 +17585,66 @@ msgstr "Giá filament. Chỉ cho thống kê."
 msgid "money/kg"
 msgstr "tiền/kg"
 
+msgid "Enable adaptive nozzle temperature"
+msgstr ""
+
+msgid "Adjust the commanded nozzle temperature to the planned volumetric flow. Experimental: one material and one Klipper hotend. The first layer and custom G-code remain protected. Other layers nozzle temperature is ignored; the adaptive target starts from the first-layer temperature and follows the flow/temperature table within the target rise/fall limits. Printing speeds are preserved unless coordinated flow is enabled."
+msgstr ""
+
+msgid "Coordinate flow with nozzle temperature"
+msgstr ""
+
+msgid "Experimental: lower printing feedrates in advance to smooth nominal flow according to the target rise/fall settings. Requires adaptive nozzle temperature and a strictly increasing flow/temperature table. Preserves geometry, extrusion amount, travel and bridge speeds. May substantially increase print time; does not guarantee measured nozzle or melt temperature."
+msgstr ""
+
+msgid "Minimum coordinated print speed"
+msgstr ""
+
+msgid "Lower limit for additional thermal slowdown. Already slower source moves and bridge speeds are retained. If this floor prevents a thermal transition, a warning remains. Does not change the cooling minimum speed setting."
+msgstr ""
+
+msgid "Flow / temperature table"
+msgstr ""
+
+msgid "Enter one flow and temperature pair per row: flow in mm³/s, temperature in °C. For example: 1, 232. Flows must increase and temperatures must stay inside the material's recommended nozzle temperature range. This example is not a calibrated material profile."
+msgstr ""
+
+msgid "Target rise time"
+msgstr ""
+
+msgid "Minimum time per degree when increasing the commanded temperature. This limits target changes; it is not a measured hotend heating rate."
+msgstr ""
+
+msgid "Target fall time"
+msgstr ""
+
+msgid "Minimum time per degree when decreasing the commanded temperature. This limits target changes; it is not a measured hotend cooling rate."
+msgstr ""
+
+msgid "Flow smoothing period"
+msgstr ""
+
+msgid "Time window for smoothing short flow changes, including alternating inner and outer walls. Does not change motion acceleration."
+msgstr ""
+
+msgid "Additional temperature lead time"
+msgstr ""
+
+msgid "Additional lookahead beyond the transition planned from the target rise time. Does not guarantee the measured nozzle temperature."
+msgstr ""
+
+msgid "Minimum temperature command interval"
+msgstr ""
+
+msgid "Minimum interval between adaptive temperature commands. Commands are emitted only at existing motion boundaries."
+msgstr ""
+
+msgid "Temperature command step"
+msgstr ""
+
+msgid "Size of an adaptive target change. The planner respects this step, the rise and fall times, and the minimum command interval together."
+msgstr ""
+
 msgid "Vendor of filament. For show only."
 msgstr "Nhà cung cấp filament. Chỉ để hiển thị."
 
@@ -19115,6 +19214,24 @@ msgstr "Tốc độ quạt làm mát phần có thể được tăng lên khi t�
 
 msgid "The highest printable layer height for the extruder. Used to limit the maximum layer height when enable adaptive layer height."
 msgstr "Chiều cao lớp có thể in cao nhất cho extruder. Được sử dụng để giới hạn chiều cao lớp tối đa khi bật chiều cao lớp thích ứng."
+
+msgid "Under-extrusion recovery after overhangs (Beta)"
+msgstr ""
+
+msgid "Temporarily limits speed and acceleration when an outer wall resumes faster printing after continuous slow extrusion. Klipper only. Cannot be combined with Extrusion rate smoothing. Disabled on the first layer and in spiral vase mode."
+msgstr ""
+
+msgid "Safe acceleration after overhangs (Beta)"
+msgstr ""
+
+msgid "Maximum acceleration during local under-extrusion recovery. Existing lower acceleration limits are retained."
+msgstr ""
+
+msgid "Safe speed after overhangs (Beta)"
+msgstr ""
+
+msgid "Maximum speed during local under-extrusion recovery. Existing lower speed limits are retained. Recovery length follows the acceleration distance, with a short transition and cruise section."
+msgstr ""
 
 msgid "Extrusion rate smoothing"
 msgstr "Làm mịn tốc độ đùn"
@@ -37347,6 +37464,710 @@ msgstr "Thời gian ước tính:"
 # AI Translated
 msgid "Remaining time:"
 msgstr "Thời gian còn lại:"
+
+msgid "Invalid flow/temperature table; enter pairs of numbers"
+msgstr ""
+
+msgid "Invalid adaptive-temperature limits"
+msgstr ""
+
+msgid "Adaptive-temperature times must be positive"
+msgstr ""
+
+msgid "Adaptive temperature needs valid limits and at least two table points"
+msgstr ""
+
+msgid "Table flows must increase and temperatures must stay within the working limits"
+msgstr ""
+
+msgid "The temperature entering an adaptive region is outside its working limits"
+msgstr ""
+
+msgid "Custom G-code contains a reserved adaptive-temperature transport marker"
+msgstr ""
+
+msgid "Invalid adaptive-temperature transport marker"
+msgstr ""
+
+msgid "Unknown adaptive-temperature section"
+msgstr ""
+
+msgid "Unbalanced adaptive-temperature sections"
+msgstr ""
+
+msgid "An adaptive-temperature section was lost by a G-code filter"
+msgstr ""
+
+msgid "The thermal log needs at least two samples."
+msgstr ""
+
+msgid "Thermal samples need increasing timestamps and finite temperatures within the supported range."
+msgstr ""
+
+msgid "Heater power and fan values must be between zero and one."
+msgstr ""
+
+msgid "Recorded flow must be finite and nonnegative."
+msgstr ""
+
+msgid "Commanded flow must be finite and cannot contain retractions in the loaded calibration."
+msgstr ""
+
+msgid "The thermal CSV has empty or duplicate column names."
+msgstr ""
+
+msgid "The thermal CSV needs time_s, target_c and temperature_c columns."
+msgstr ""
+
+msgid "The thermal CSV has a row with an incorrect number of columns."
+msgstr ""
+
+msgid "The thermal CSV contains an invalid number. Use a decimal point."
+msgstr ""
+
+msgid "A required thermal CSV value is missing."
+msgstr ""
+
+msgid "The thermal CSV could not be read completely."
+msgstr ""
+
+msgid "A loaded calibration stage occurs in separate parts of the log."
+msgstr ""
+
+msgid "The proposed target slew setting is outside the supported range."
+msgstr ""
+
+msgid "The proposed temperature lead or smoothing period is outside the supported range."
+msgstr ""
+
+msgid "Settings cannot be proposed: accepted heating and cooling responses under positive printing load are required, within the supported setting ranges."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Printer profile: %s"
+msgstr ""
+
+#, c-format
+msgid "Provisional target ramp limits use the slower observed settling envelope with a 25% margin. Delay plus one observed sampling interval is supplied separately as additional lead. These are starting settings, not measured ramp limits or a verified thermal model."
+msgstr ""
+
+msgid "Setting"
+msgstr ""
+
+msgid "Current"
+msgstr ""
+
+msgid "Proposed"
+msgstr ""
+
+msgid "Also apply the suggested 5 s flow smoothing period (recommendation, not a measured value)"
+msgstr ""
+
+msgid "Apply changes only the printer settings. Save printer preset keeps them using the normal Orca save dialog; system presets are saved as user copies. Undo restores the previous values as unsaved edits. Filament settings are unchanged."
+msgstr ""
+
+msgid "Apply to printer settings"
+msgstr ""
+
+msgid "Save printer preset..."
+msgstr ""
+
+msgid "Undo application"
+msgstr ""
+
+msgid "The selected printer changed. Reopen the calibration log for the intended printer."
+msgstr ""
+
+msgid "Cannot apply thermal settings"
+msgstr ""
+
+msgid "Applied as unsaved printer edits. Save printer preset to keep them. Saving also includes any other unsaved printer edits."
+msgstr ""
+
+msgid "Printer edits are still unsaved."
+msgstr ""
+
+msgid "Printer preset saved. Undo restores the previous values as unsaved edits; save again to keep the undo."
+msgstr ""
+
+msgid "Cannot save printer preset"
+msgstr ""
+
+msgid "Previous values restored as unsaved printer edits. Save printer preset to keep the restored values."
+msgstr ""
+
+msgid "Target temperature"
+msgstr ""
+
+msgid "Sensor temperature"
+msgstr ""
+
+msgid "Cannot open the thermal CSV."
+msgstr ""
+
+msgid "Cannot analyze thermal response"
+msgstr ""
+
+msgid "Measured sensor response from a recorded log. This does not measure melt temperature. Printer settings change only when you apply a proposal below."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Source CSV: %s\n"
+"\n"
+msgstr ""
+
+msgid "No temperature steps of at least 5 degrees were found. Record stable plateaus before and after each step."
+msgstr ""
+
+#. TRN: Values are time in seconds and temperatures in degrees Celsius.
+#, c-format, boost-format
+msgid "At %.1f s: %.1f to %.1f C\n"
+msgstr ""
+
+#, c-format, boost-format
+msgid "10-90%% response: %.3f s/C; extrapolated delay: %.2f s; overshoot: %.2f C\n"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Settling within 1 C with at least 10 s of observed dwell: %.2f s\n"
+msgstr ""
+
+msgid "Accepted for the measured response summary."
+msgstr ""
+
+msgid "Excluded: the preceding 5 s are not stable within 1 C of the previous target."
+msgstr ""
+
+msgid "Excluded: a sample gap exceeds 2.5 s."
+msgstr ""
+
+msgid "Excluded: the response or stable dwell is incomplete."
+msgstr ""
+
+msgid "Excluded: fan or flow conditions were not recorded."
+msgstr ""
+
+msgid "Excluded: the transition contains a temperature reversal greater than 2 C."
+msgstr ""
+
+msgid "Excluded: fan or flow conditions changed during the transition."
+msgstr ""
+
+msgid "Printing-load log: flow is derived from commanded extruder velocity. It does not verify deposited flow or missed steps."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Initial measurement fan fractions: part %.2f; auxiliary %.2f; chamber %.2f. Changes are checked separately for each response.\n"
+"\n"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Stage %s: %.1f to %.1f s; target %.1f C\n"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Mean commanded flow over the final 5 s: %.3f mm3/s\n"
+msgstr ""
+
+msgid "The extrusion load changed here. This stage is not a fixed-load temperature response."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Planning reference from observed settling: heating %.3f s/C; cooling %.3f s/C; observed delay %.2f s.\n"
+msgstr ""
+
+msgid "These are provisional planning references from the recorded steps, not verified limits for smooth temperature ramps. The proposal below converts them into conservative target limits; it does not copy measured slopes directly."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Slowest accepted heating response: %.3f s/C\n"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Slowest accepted cooling response: %.3f s/C\n"
+msgstr ""
+
+msgid "These measurements describe only the recorded temperature range, fan and extrusion conditions. Proposals are starting settings for this printer under those conditions. Applying them does not enable adaptive temperature or change printing speeds."
+msgstr ""
+
+msgid "The coordinated printing speed floor must be positive."
+msgstr ""
+
+msgid "Coordinated flow requires a strictly increasing flow/temperature table."
+msgstr ""
+
+msgid "A coordinated extrusion has no valid source feedrate."
+msgstr ""
+
+msgid "Coordinated flow does not support inch units or runtime speed/flow overrides."
+msgstr ""
+
+msgid "Could not read source feedrates for coordinated flow."
+msgstr ""
+
+msgid "Could not open the coordinated flow output."
+msgstr ""
+
+msgid "Could not write the coordinated flow plan."
+msgstr ""
+
+msgid "Could not replace the coordinated flow output."
+msgstr ""
+
+msgid "The adaptive temperature report is too large."
+msgstr ""
+
+msgid "Could not read the adaptive temperature report output."
+msgstr ""
+
+msgid "Could not append the adaptive temperature report."
+msgstr ""
+
+msgid "Could not save the adaptive temperature report."
+msgstr ""
+
+msgid "Could not open the G-code temperature report."
+msgstr ""
+
+msgid "Could not read the G-code temperature report."
+msgstr ""
+
+msgid "The adaptive temperature report is incomplete."
+msgstr ""
+
+msgid "The adaptive temperature report is damaged."
+msgstr ""
+
+msgid "This adaptive temperature report version is unsupported."
+msgstr ""
+
+msgid "Heating target rate limit"
+msgstr ""
+
+msgid "Cooling target rate limit"
+msgstr ""
+
+msgid "Command interval or target quantization"
+msgstr ""
+
+msgid "Short temperature excursion suppressed"
+msgstr ""
+
+msgid "Target held for future printing demand"
+msgstr ""
+
+msgid "Entry target differs from flow reference"
+msgstr ""
+
+msgid "Minimum coordinated print speed reached"
+msgstr ""
+
+msgid "Original bridge speed retained"
+msgstr ""
+
+msgid "Combined unretract move left unchanged"
+msgstr ""
+
+msgid "Target step or motion boundary limit"
+msgstr ""
+
+msgid "Unknown planning note"
+msgstr ""
+
+msgid "Open G-code temperature report"
+msgstr ""
+
+msgid "G-code files (*.gcode;*.gco)|*.gcode;*.gco"
+msgstr ""
+
+msgid "This G-code does not contain an adaptive temperature report. Slice the project with adaptive nozzle temperature enabled to create one."
+msgstr ""
+
+msgid "Mode: coordinated flow and temperature."
+msgstr ""
+
+msgid "Mode: adaptive temperature only."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Estimated print time: %.1f min to %.1f min (%+.1f s)."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Adaptive printing target range: %.1f to %.1f °C."
+msgstr ""
+
+#, c-format
+msgid "Adaptive temperature command count: %zu. Reduced printing move count: %zu."
+msgstr ""
+
+msgid "Planning limitations remain; see the layer and reason groups below."
+msgstr ""
+
+msgid "No planning limitation warning was raised."
+msgstr ""
+
+msgid "Temperature is a planned target. No nozzle temperature measurements are included."
+msgstr ""
+
+msgid "Original clock: before speed changes. Final clock: after speed changes. Layers start at 1. Original-clock differences use the nominal flow/temperature reference; final-clock differences use smoothed lookahead demand. Groups include intentional smoothing and lookahead holds. These are not measured heater errors."
+msgstr ""
+
+msgid "Clock"
+msgstr ""
+
+msgid "Time range (s)"
+msgstr ""
+
+msgid "Planning reason"
+msgstr ""
+
+msgid "Max. target difference (°C)"
+msgstr ""
+
+msgid "Affected boundaries"
+msgstr ""
+
+msgctxt "Adaptive temperature report clock"
+msgid "Original"
+msgstr ""
+
+msgctxt "Adaptive temperature report clock"
+msgid "Final"
+msgstr ""
+
+msgid "Not evaluated"
+msgstr ""
+
+#, c-format
+msgid "Layer/reason groups shown: %zu of %zu."
+msgstr ""
+
+msgid "Could not read the adaptive temperature report. The file may be missing, incomplete or unsupported. Reslice the project to recreate the report."
+msgstr ""
+
+msgid "Cannot write the stop request. Cancel the calibration in the printer interface."
+msgstr ""
+
+msgid "Stopping: waiting for cancellation, heaters off and speed restoration to be confirmed..."
+msgstr ""
+
+msgid "Measurement complete. Cancellation, heaters off and speed restoration confirmed. Analyze the recorded CSV to review and apply the proposed settings."
+msgstr ""
+
+msgid "Recording stopped. Calibration cancellation, heaters off and speed restoration confirmed. The partial CSV is retained."
+msgstr ""
+
+msgid "Measurement failed. Calibration cancellation, heaters off and speed restoration confirmed. The CSV and worker log are retained."
+msgstr ""
+
+msgid "Recording failed or could not verify the calibration. Check the printer interface; cancellation and heaters off have not been confirmed. The worker log is beside the CSV."
+msgstr ""
+
+msgid "Recording: waiting for the prepared print to reach layer 7, the measurement height and steady cooling."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Stage %d / %d; nozzle %.1f C; target %.1f C; requested flow %.1f mm3/s"
+msgstr ""
+
+msgid "The bundled calibration worker or Python runtime is missing."
+msgstr ""
+
+msgid "Cannot start recording"
+msgstr ""
+
+msgid "Save a new thermal recording"
+msgstr ""
+
+msgid "Choose a new CSV name. Existing recordings and their control files are never replaced."
+msgstr ""
+
+msgid "Cannot create the recording control files."
+msgstr ""
+
+msgid "The calibration worker could not be launched. No printer commands were sent."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Verifying the uploaded calibration file. Recording: %s"
+msgstr ""
+
+msgid "Measure the hotend while printing a continuous spiral. This prepared protocol is for K2PRO, PLA 1.75 mm, a 0.4 mm nozzle and Textured PEI Plate at 50 C. It uses the fixed table 1 mm3/s at 196 C, 10 at 213 C and 22 at 228 C; it does not use the currently selected filament table."
+msgstr ""
+
+msgid "1. Save the prepared G-code, transfer it to the printer and start it yourself with the original filename. Start recording here while its initial layers are printing. The recorder verifies the uploaded file and waits for the measurement region."
+msgstr ""
+
+msgid "Save K2PRO PLA calibration G-code..."
+msgstr ""
+
+msgid "Choose the calibration G-code folder"
+msgstr ""
+
+msgid "Cannot save the calibration file. Choose a writable folder without an existing file of that name."
+msgstr ""
+
+msgid "Cannot prepare calibration"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Saved: %s\n"
+"Start this file as a separate print, then start recording here. Do not reslice or rename it."
+msgstr ""
+
+msgid "Calibration file prepared"
+msgstr ""
+
+msgid "2. Recording controls temperature and speed through Moonraker. Nine stages check actual settling under commanded extrusion load. At completion, Stop, or failure it attempts to restore speed and cancel only the verified calibration job, then checks that both heaters are off. Keep the printer supervised; use its interface if the connection fails."
+msgstr ""
+
+msgid "Moonraker URL"
+msgstr ""
+
+msgid "Printer file path"
+msgstr ""
+
+msgid "I checked these conditions; the prepared K2PRO PLA print is running."
+msgstr ""
+
+msgid "Start recording..."
+msgstr ""
+
+msgid "Stop and cancel calibration"
+msgstr ""
+
+msgid "Ready. No connection or printer commands have been made."
+msgstr ""
+
+msgid "3. Analyze the recorded CSV, review the graph and proposed values, then apply and save them using the printer preset controls. Measurements describe the nozzle sensor under these conditions, not melt temperature. Settings are never applied automatically."
+msgstr ""
+
+msgid "Analyze recorded CSV..."
+msgstr ""
+
+msgid "Open an existing thermal CSV..."
+msgstr ""
+
+msgid "Import hotend thermal response CSV"
+msgstr ""
+
+msgid "Recording finished. Open the recorded CSV for analysis."
+msgstr ""
+
+msgid "Recording stopped or failed. Check the printer interface and the worker log beside the CSV."
+msgstr ""
+
+msgid "The selected printer has no usable printable area."
+msgstr ""
+
+msgid "A centred calibration cylinder does not fit the selected bed or its exclusion area."
+msgstr ""
+
+msgid "Calibration dimensions and flow must be finite and nonnegative."
+msgstr ""
+
+msgid "Interlayer adhesion calibration currently requires one Klipper hotend on a horizontal bed."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Use a positive layer height up to 80% of the nozzle diameter and a wall width between one and two nozzle diameters."
+msgstr ""
+
+msgid "Calibration temperatures must be between zero and 1000 C."
+msgstr ""
+
+msgid "Use a positive flow, descending temperatures and an exact whole number of temperature steps (at most 150)."
+msgstr ""
+
+msgid "Calibration temperatures must stay within the selected filament's working limits."
+msgstr ""
+
+msgid "External G-code postprocessing is not supported for this calibration."
+msgstr ""
+
+msgid "This calibration requires layer-change G-code containing only comments, extrusion-coordinate resets or print statistics."
+msgstr ""
+
+msgid "The requested flow exceeds the filament flow limit or its flow ratio is invalid."
+msgstr ""
+
+msgid "Valid printer cooling-response and lead-time references are required."
+msgstr ""
+
+msgid "The printer acceleration limit is unavailable."
+msgstr ""
+
+msgid "The requested calibration flow requires a speed above the printer limit."
+msgstr ""
+
+msgid "The cylinder needed to maintain this flow without layer-cooling slowdown does not fit the bed. Reduce the test flow."
+msgstr ""
+
+msgid "Stable section height cannot be smaller than the automatic three-turn, five-second minimum."
+msgstr ""
+
+msgid "The calibration cylinder is too tall. Narrow the temperature range or split it into separate tests; dwell is not shortened automatically."
+msgstr ""
+
+msgid "The calibration contains duplicate height maps."
+msgstr ""
+
+msgid "Unsupported interlayer calibration height map."
+msgstr ""
+
+msgid "Invalid calibration height map."
+msgstr ""
+
+msgid "The calibration height map is inconsistent."
+msgstr ""
+
+msgid "Keep exactly one cylinder and one instance in an interlayer calibration project."
+msgstr ""
+
+msgid "Keep the calibration cylinder without modifiers or variable layer heights."
+msgstr ""
+
+msgid "The calibration geometry or printing conditions changed. Recreate it to obtain a valid height map."
+msgstr ""
+
+msgid "A required calibration setting changed. Recreate the cylinder before slicing."
+msgstr ""
+
+msgid "The calibration temperature schedule changed. Recreate the cylinder."
+msgstr ""
+
+msgid "Retraction recovery interrupts the calibration measurement wall."
+msgstr ""
+
+msgid "The sliced cylinder does not maintain the requested flow. Cooling or motion limits invalidate this calibration; use a lower flow or recreate it."
+msgstr ""
+
+msgid "This measurement conflicts with the current increasing temperature table. Review the table in filament settings; the result remains available to copy."
+msgstr ""
+
+msgid "Use one filament slot for interlayer adhesion calibration."
+msgstr ""
+
+msgid "Enter a number in each calibration field."
+msgstr ""
+
+msgid "Temperatures and temperature step must be whole numbers."
+msgstr ""
+
+#, c-format
+msgid ""
+"Cylinder diameter: %.1f mm\n"
+"Total height: %.2f mm; steps: %zu\n"
+"Printing speed: %.2f mm/s; turn time: %.2f s\n"
+"Measurement begins at: %.2f mm\n"
+"Cooling section per step: %.2f mm; stable section: %.2f mm\n"
+"Estimated wall printing: %.1f min; wall volume: %.0f mm3 (brim and printer startup are additional)"
+msgstr ""
+
+msgid "Layer-time slowdown is disabled for this calibration. Fan settings are unchanged; shorter turns change cooling between layers."
+msgstr ""
+
+msgid "Interlayer adhesion calibration"
+msgstr ""
+
+msgid "Cannot save the generated calibration mesh."
+msgstr ""
+
+msgid "Cannot load the generated calibration cylinder."
+msgstr ""
+
+msgid "The cylinder and temperature height map are ready. Use the normal Slice plate and Print plate controls. Save the project as 3MF to retain the map. Filament fan settings are retained; layer-time slowdown follows the calibration checkbox. Automatic temperature and flow adaptation are disabled for this calibration. Printer presets are not saved automatically."
+msgstr ""
+
+msgid "Calibration created"
+msgstr ""
+
+msgid "Cannot create calibration"
+msgstr ""
+
+msgid "Open the saved calibration project to use its height map."
+msgstr ""
+
+msgid "Enter the remaining cylinder height measured from the build plate."
+msgstr ""
+
+msgid "This height is outside the calibration cylinder."
+msgstr ""
+
+msgid "This is the base or warmup section, outside the measurement."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Cooling section: commanded target changed from %d to %d C. This height does not identify a settled sensor temperature."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Stable-section target: %d C at %.3f mm3/s. This is a commanded target, not a measured melt temperature or a guaranteed working-temperature recommendation."
+msgstr ""
+
+msgid "The selected filament changed. Evaluate the measurement again before applying it."
+msgstr ""
+
+msgid "The measured point was added as an unsaved filament edit. Review and save the filament preset normally. Adaptive temperature was not enabled."
+msgstr ""
+
+msgid "Calibration result"
+msgstr ""
+
+msgid "Cannot add calibration point"
+msgstr ""
+
+msgid "Uses the current printer, filament and plate. A native spiral cylinder tests one constant flow while temperature decreases. Filament fan settings are retained. Cooling transitions use the printer's response references; stable sections use at least three turns and five seconds. These are provisional test conditions, not sensor feedback."
+msgstr ""
+
+msgid "Wall line width (mm)"
+msgstr ""
+
+msgid "Target volumetric flow (mm3/s)"
+msgstr ""
+
+msgid "Start temperature (C)"
+msgstr ""
+
+msgid "End temperature (C)"
+msgstr ""
+
+msgid "Temperature step (C)"
+msgstr ""
+
+msgid "Stable section height (mm; 0 = automatic)"
+msgstr ""
+
+msgid "Minimum cylinder diameter (mm; 0 = automatic)"
+msgstr ""
+
+msgid "Disable layer-time slowdown for this calibration"
+msgstr ""
+
+msgid "Allows high test flows on a smaller cylinder. Fan settings are retained, but each layer has less cooling time. Temperature transitions and stable sections still retain their required duration. This changes only the unsaved calibration filament settings."
+msgstr ""
+
+msgid "Create calibration"
+msgstr ""
+
+msgid "After peeling, open the saved 3MF and enter the remaining cylinder height from the build plate (mm):"
+msgstr ""
+
+msgid "Find temperature at height"
+msgstr ""
+
+msgid "The height map distinguishes cooling transitions from stable sections."
+msgstr ""
+
+msgid "Copy table point"
+msgstr ""
+
+msgid "Add point to filament table"
+msgstr ""
 
 #: resources/data/hints.ini: [hint:Precise wall]
 msgid ""

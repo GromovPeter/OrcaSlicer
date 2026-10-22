@@ -14,6 +14,8 @@
 #include "libslic3r/CustomGCode.hpp"
 #include "libslic3r/MultiNozzleUtils.hpp"
 #include "libslic3r/GCode/MachineFrameTransform.hpp"
+#include "libslic3r/GCode/FlowTimeline.hpp"
+#include "libslic3r/GCode/GCodeProvenance.hpp"
 
 #include <cstddef>
 #include <cassert>
@@ -35,6 +37,7 @@
 namespace Slic3r {
 
 class Print;
+struct AdaptiveTemperaturePlan;
 
 // For a filament whose density is not set, in g/cm³.
 inline constexpr float DEFAULT_FILAMENT_DENSITY = 1.245f;
@@ -833,7 +836,7 @@ inline constexpr float DEFAULT_FILAMENT_DENSITY = 1.245f;
 
             // additional_time is attributed to the first block matching target_move_type
             // (EMoveType::Noop matches any block, i.e. the first processed block).
-            void calculate_time(GCodeProcessorResult& result, PrintEstimatedStatistics::ETimeMode mode, size_t keep_last_n_blocks = 0, float additional_time = 0.0f, EMoveType target_move_type = EMoveType::Noop, bool is_final = false);
+            void calculate_time(GCodeProcessorResult& result, PrintEstimatedStatistics::ETimeMode mode, size_t keep_last_n_blocks = 0, float additional_time = 0.0f, EMoveType target_move_type = EMoveType::Noop, bool is_final = false, FlowTimeline* flow_timeline = nullptr, bool piecewise_temperatures = false);
         };
 
         struct UsedFilaments  // filaments per ColorChange
@@ -1335,10 +1338,26 @@ inline constexpr float DEFAULT_FILAMENT_DENSITY = 1.245f;
         Print* m_print{ nullptr };
 
         GCodeProcessorResult m_result;
+        std::optional<FlowTimeline> m_flow_timeline;
+        bool m_piecewise_temperatures{false};
+        std::vector<GCodeSection> m_flow_sections;
         static unsigned int s_result_id;
 
     public:
         GCodeProcessor();
+        // Opt-in diagnostics, independent of filament settings. Input line IDs
+        // are not yet remapped through export rewrite passes; never use them
+        // for temperature injection without the generator provenance adapter.
+        void enable_flow_timeline(bool enabled = true) {
+            if (enabled) m_flow_timeline.emplace();
+            else m_flow_timeline.reset();
+        }
+        const FlowTimeline* flow_timeline() const { return m_flow_timeline ? &*m_flow_timeline : nullptr; }
+        FlowTimeline* flow_timeline() { return m_flow_timeline ? &*m_flow_timeline : nullptr; }
+        void set_flow_provenance(std::vector<GCodeSection> sections) { m_flow_sections = std::move(sections); }
+        void apply_adaptive_temperature_plan(const AdaptiveTemperaturePlan& plan,
+                                            const std::function<std::string(int)>& format_temperature);
+        void replay_coordinated_flow(const std::function<void()>& cancel_callback);
         void init_filament_maps_and_nozzle_type_when_import_only_gcode();
         // Reprocessing an already-generated g-code (from-previous / imported g-code) does not rebuild
         // the per-filament nozzle grouping the multi-nozzle device GUI needs. Surface it onto the

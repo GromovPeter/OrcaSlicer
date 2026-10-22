@@ -261,8 +261,25 @@ set(lisbslic3r_sources
     GCode/TimelapsePosPicker.hpp
     GCode.cpp
     GCode/ExtrusionProcessor.hpp
+    GCode/AppearanceUnderExtrusionAccelRecoveryFilter.cpp
+    GCode/AppearanceUnderExtrusionAccelRecoveryFilter.hpp
+    GCode/InterestRegion.hpp
     GCode/FanMover.cpp
     GCode/FanMover.hpp
+    GCode/GCodeProvenance.cpp
+    GCode/GCodeProvenance.hpp
+    InterlayerAdhesionCalibration.cpp
+    InterlayerAdhesionCalibration.hpp
+    ThermalResponse.cpp
+    ThermalResponse.hpp
+    GCode/AdaptiveFlowPlanner.cpp
+    GCode/AdaptiveFlowPlanner.hpp
+    GCode/AdaptiveTemperatureReport.cpp
+    GCode/AdaptiveTemperatureReport.hpp
+    GCode/AdaptiveTemperaturePlanner.cpp
+    GCode/AdaptiveTemperaturePlanner.hpp
+    GCode/FlowTimeline.cpp
+    GCode/FlowTimeline.hpp
     GCode/GCodeProcessor.cpp
     GCode/GCodeProcessor.hpp
     GCode/GCodeStatistics.cpp

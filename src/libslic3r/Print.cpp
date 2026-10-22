@@ -204,6 +204,16 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "printing_by_object_gcode",
         "filament_end_gcode",
         "post_process",
+        "filament_adaptive_temperature",
+        "filament_coordinated_temperature",
+        "adaptive_temperature_min_print_speed",
+        "filament_flow_temperature_table",
+        "adaptive_temperature_rise_time",
+        "adaptive_temperature_fall_time",
+        "adaptive_temperature_smoothing_period",
+        "adaptive_temperature_lead_time",
+        "adaptive_temperature_min_interval",
+        "adaptive_temperature_step",
         // "plugins" is the derived manifest backing the plugin-picker options; on its own it only
         // affects G-code export. The specific option (e.g. slicing_pipeline_plugin) drives any re-slice.
         "plugins",
@@ -384,6 +394,9 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
             // Spiral Vase forces different kind of slicing than the normal model:
             // In Spiral Vase mode, holes are closed and only the largest area contour is kept at each layer.
             // Therefore toggling the Spiral Vase on / off requires complete reslicing.
+            || opt_key == "msao_recovery_enable"
+            || opt_key == "msao_safe_accel"
+            || opt_key == "msao_safe_velocity"
             || opt_key == "spiral_mode"
             // Build plate tilt changes slicing plane orientation.
             || opt_key == "build_plate_tilt_x"
@@ -1881,6 +1894,17 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
 
     if (extruders.empty())
         return { L("No extrusions under current settings.") };
+
+    for (const PrintObject* object : m_objects) {
+        if (!object->config().msao_recovery_enable.value) continue;
+        if (m_config.gcode_flavor != gcfKlipper)
+            return {L("Under-extrusion recovery after overhangs currently requires Klipper."), object, "msao_recovery_enable"};
+        if (!std::isfinite(object->config().msao_safe_accel.value) || object->config().msao_safe_accel.value < 1 ||
+            !std::isfinite(object->config().msao_safe_velocity.value) || object->config().msao_safe_velocity.value < 1)
+            return {L("Overhang recovery speed and acceleration must be finite positive values."), object, "msao_safe_velocity"};
+        if (m_config.max_volumetric_extrusion_rate_slope.value > 0)
+            return {L("Disable Extrusion rate smoothing before enabling under-extrusion recovery after overhangs."), object, "msao_recovery_enable"};
+    }
 
     // IDEX/IQEX: block multi-color in non-primary parallel modes when the active
     // configuration can't physically support it (no within-gantry toolchange path

@@ -1,4 +1,8 @@
+#include "AdhesionCalibrationDialog.hpp"
 #include "MainFrame.hpp"
+#include "HotendThermalResponse.hpp"
+#include "AdaptiveTemperatureReportDialog.hpp"
+#include "libslic3r/GCode/GCodeProcessor.hpp"
 
 #include <wx/event.h>
 #include "slic3r/GUI/Event.hpp"
@@ -2937,6 +2941,20 @@ static void add_common_publish_menu_items(wxMenu* publish_menu, MainFrame* mainF
 
 void MainFrame::add_common_view_menu_items(wxMenu* view_menu, std::function<bool(void)> can_change_view)
 {
+    append_menu_item(view_menu, wxID_ANY, _L("Adaptive temperature report"), _L("Show the adaptive temperature report for the current plate"),
+        [this](wxCommandEvent&) {
+            std::string filename;
+            if (m_plater) {
+                auto& plates = m_plater->get_partplate_list();
+                const int current = plates.get_curr_plate_index();
+                if (current >= 0 && current < plates.get_plate_count()) {
+                    auto* result = plates.get_curr_plate()->get_slice_result();
+                    if (result) filename = result->filename;
+                }
+            }
+            show_adaptive_temperature_report(this, filename);
+        }, "", nullptr, []() { return true; }, this);
+    view_menu->AppendSeparator();
     append_shortcut_item(view_menu, Shortcut::ViewDefault, true, _L("Default View"), _L("Default View"), [this](wxCommandEvent&) {
         select_view("plate");
         plater()->get_current_canvas3D()->zoom_to_bed();
@@ -3649,6 +3667,12 @@ void MainFrame::init_menubar_as_editor()
         [this](wxCommandEvent&) { run_calibration(CalibKind::VFA); }, "", nullptr,
         [this]() {return m_plater->is_view3D_shown();; }, this);
 
+    append_menu_item(m_topbar->GetCalibMenu(), wxID_ANY, _L("Interlayer adhesion / temperature"), _L("Create a continuous-flow cylinder and a temperature-to-height map"),
+        [this](wxCommandEvent&) { show_adhesion_calibration(this); }, "", nullptr, [this]() { return m_plater->is_view3D_shown(); }, this);
+
+    append_menu_item(m_topbar->GetCalibMenu(), wxID_ANY, _L("Hotend thermal response"), _L("Analyze a recorded hotend thermal response CSV"),
+        [this](wxCommandEvent&) { show_hotend_thermal_response(this); }, "", nullptr, []() { return true; }, this);
+
     // help
     append_menu_item(m_topbar->GetCalibMenu(), wxID_ANY, _L("Calibration Guide"), _L("Calibration Guide"), [](wxCommandEvent &)
                      { wxLaunchDefaultBrowser("https://www.orcaslicer.com/wiki/calibration_guide", wxBROWSER_NEW_WINDOW); }, "", nullptr, [this]()
@@ -3754,6 +3778,12 @@ void MainFrame::init_menubar_as_editor()
     append_menu_item(calib_menu, wxID_ANY, _L("VFA"), _L("VFA"),
         [this](wxCommandEvent&) { run_calibration(CalibKind::VFA); }, "", nullptr,
         [this]() {return m_plater->is_view3D_shown();; }, this);
+    append_menu_item(calib_menu, wxID_ANY, _L("Interlayer adhesion / temperature"), _L("Create a continuous-flow cylinder and a temperature-to-height map"),
+        [this](wxCommandEvent&) { show_adhesion_calibration(this); }, "", nullptr, [this]() { return m_plater->is_view3D_shown(); }, this);
+
+    append_menu_item(calib_menu, wxID_ANY, _L("Hotend thermal response"), _L("Analyze a recorded hotend thermal response CSV"),
+        [this](wxCommandEvent&) { show_hotend_thermal_response(this); }, "", nullptr, []() { return true; }, this);
+
     // help
     append_menu_item(calib_menu, wxID_ANY, _L("Calibration Guide"), _L("Calibration Guide"),
         [](wxCommandEvent&) { wxLaunchDefaultBrowser("https://www.orcaslicer.com/wiki/calibration_guide", wxBROWSER_NEW_WINDOW); }, "", nullptr,

@@ -1259,6 +1259,9 @@ protected: \
 PRINT_CONFIG_CLASS_DEFINE(
     PrintObjectConfig,
 
+    ((ConfigOptionBool,                msao_recovery_enable))
+    ((ConfigOptionFloat,               msao_safe_accel))
+    ((ConfigOptionFloat,               msao_safe_velocity))
     ((ConfigOptionFloat,               brim_object_gap))
     ((ConfigOptionFloat,               brim_flow_ratio))
     ((ConfigOptionBool,                brim_use_efc_outline))
@@ -2061,6 +2064,16 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionInt,                standby_temperature_delta))
     ((ConfigOptionFloat,                preheat_time))
     ((ConfigOptionInt,                preheat_steps))
+    ((ConfigOptionBools,              filament_adaptive_temperature))
+    ((ConfigOptionBools,              filament_coordinated_temperature))
+    ((ConfigOptionFloat,              adaptive_temperature_min_print_speed))
+    ((ConfigOptionStrings,            filament_flow_temperature_table))
+    ((ConfigOptionFloat,              adaptive_temperature_rise_time))
+    ((ConfigOptionFloat,              adaptive_temperature_fall_time))
+    ((ConfigOptionFloat,              adaptive_temperature_smoothing_period))
+    ((ConfigOptionFloat,              adaptive_temperature_lead_time))
+    ((ConfigOptionFloat,              adaptive_temperature_min_interval))
+    ((ConfigOptionInt,                adaptive_temperature_step))
     ((ConfigOptionInts,               nozzle_temperature))
     ((ConfigOptionBools,              wipe))
     // BBS

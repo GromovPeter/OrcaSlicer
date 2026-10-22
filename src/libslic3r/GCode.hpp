@@ -7,6 +7,7 @@
 #include "Print.hpp"
 #include "libslic3r.h"
 #include "GCodeWriter.hpp"
+#include "GCode/GCodeProvenance.hpp"
 #include "GCode/BeltKinematics.hpp"
 #include "Layer.hpp"
 #include "Point.hpp"
@@ -410,7 +411,8 @@ public:
 protected:
     class GCodeOutputStream {
     public:
-        GCodeOutputStream(FILE *f, GCodeProcessor &processor) : f(f), m_processor(processor) {}
+        GCodeOutputStream(FILE *f, GCodeProcessor &processor, GCodeProvenance* provenance = nullptr)
+            : f(f), m_processor(processor), m_provenance(provenance) {}
         ~GCodeOutputStream() { this->close(); }
 
         bool is_open() const { return f; }
@@ -434,6 +436,7 @@ protected:
     private:
         FILE *f = nullptr;
         GCodeProcessor &m_processor;
+        GCodeProvenance* m_provenance{nullptr};
     };
 
     // Virtual hooks for belt printer subclass (BeltGCode).
@@ -885,6 +888,8 @@ protected:
 
     // Processor
     GCodeProcessor m_processor;
+    std::shared_ptr<GCodeProvenance> m_adaptive_provenance;
+    unsigned int m_adaptive_filament{0};
 
     //some post-processing on the file, with their data class
     std::unique_ptr<FanMover> m_fan_mover;

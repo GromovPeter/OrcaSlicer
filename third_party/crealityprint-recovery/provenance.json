@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/CrealityOfficial/CrealityPrint",
+  "tag": "v7.1.0",
+  "tag_object": {
+    "sha": "7622ae4518f7988965a6bd32ca41ea1c59e4dec0",
+    "type": "commit",
+    "url": "https://api.github.com/repos/CrealityOfficial/CrealityPrint/git/commits/7622ae4518f7988965a6bd32ca41ea1c59e4dec0"
+  },
+  "source_files_sha256": {
+    "AppearanceUnderExtrusionAccelRecoveryFilter.cpp": "b50825952ed6a0aa7a43739b841533e7b33ec5e619321efe266429aa345d6352",
+    "AppearanceUnderExtrusionAccelRecoveryFilter.hpp": "95452bbaaacc3ce7f729f28ccded309839dc9c7607d8863c2094a9f64745da9f",
+    "InterestRegion.hpp": "4bd78dfd283a64512a5d354301d38a18d81fe3e9db1c5193a36a4c4848af4d18"
+  },
+  "license": "GNU Affero General Public License v3; see LICENSE.txt",
+  "immutable_commit_sources_verified": true,
+  "license_sha256": "5537d2d539c94627446bf7eb30d30fda28d1de8aa9a41c25b83012db52ff6f8b"
+}

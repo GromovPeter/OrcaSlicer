@@ -7,7 +7,11 @@ add_executable(${_TEST_NAME}_tests
 	test_extrusion_entity.cpp
 	test_extrusion_processor.cpp
 	test_fill.cpp
+	test_interlayer_adhesion.cpp
+	test_overhang_recovery.cpp
 	test_flow.cpp
+	test_adaptive_temperature.cpp
+	test_flow_timeline.cpp
 	test_gcode_processor.cpp
 	test_gcode_statistics.cpp
 	test_gcode_timing.cpp
