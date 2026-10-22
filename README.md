@@ -1,3 +1,11 @@
+> **Experimental adaptive-temperature fork.** This development branch adds
+> flow-dependent nozzle temperature, calibration workflows and Creality overhang
+> recovery. It is not an official OrcaSlicer release. Start with the
+> [fork user guide](docs/adaptive-temperature.md),
+> [build instructions](docs/adaptive-temperature-build.md), and
+> [validation status](docs/adaptive-temperature-validation.md).
+> The upstream project information follows below.
+
 <div align="center">
 
 <picture>
