@@ -6,7 +6,7 @@ It is an experimental development branch, not an official OrcaSlicer release.
 The development base is `5a36120c588100e6bff01fa595e18de83ca67af2`.
 
 The supported adaptive-temperature workflow is one material, one physical
-Klipper hotend and ordinary layer-by-layer printing. Unsupported combinations
+Klipper hotend and layer-by-layer printing, including spiral vase mode. Unsupported combinations
 are rejected by validation. Defaults leave adaptation, coordinated flow and
 overhang recovery disabled. Existing profiles do not need these features.
 
@@ -69,7 +69,7 @@ The current editor is multiline text, not a dedicated row editor.
 | Minimum coordinated print speed | mm/s | Floor for additional thermal slowdown |
 | Additional temperature lead time | s | Extra lookahead allowance |
 | Minimum temperature command interval | s | Limit adaptive command frequency |
-| Temperature command step | °C | Quantize target changes |
+| Temperature command step | °C | Target change size, 0.5 to 5; decimal commas are accepted |
 
 Rise/fall settings limit commanded targets. They are not a live measurement of
 heater performance or melt temperature. Flow smoothing does not set motion
@@ -89,6 +89,11 @@ by protected motion, bridge speeds, command boundaries or the minimum speed.
 The warning and report identify these limits. They do not establish that actual
 extrusion is defective, or that the nozzle reached the requested temperature.
 Inspect Speed, Flow and Temperature together when evaluating the result.
+
+VFA calibration supports adaptive temperature, but requires **Coordinate flow with
+nozzle temperature** to be disabled. The VFA dialog displays this requirement;
+validation and export reject the test while coordination is enabled because it
+can change the test speeds.
 
 ## Thermal-response calibration
 
@@ -168,7 +173,7 @@ See [source attribution](adaptive-temperature-sources.md) and [the filter design
 
 Windows x64 Release is the development platform. Linux/macOS feature builds
 have not been validated. Adaptive planning does not currently provide general
-multi-material, multiple-heater, sequential or spiral-vase support; consult
+multi-material, multiple-heater, or sequential printing support; consult
 validation errors instead of assuming an unsupported project is covered.
 The separate adhesion calibration intentionally uses its own vase workflow
 with normal temperature adaptation disabled.

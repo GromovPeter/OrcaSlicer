@@ -24,6 +24,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <locale>
 #include <map>
 #include <assert.h>
 #include <GCode/GCodeProcessor.hpp>
@@ -314,7 +315,7 @@ std::string GCodeWriter::postamble() const
     return gcode.str();
 }
 
-std::string GCodeWriter::set_temperature(unsigned int temperature, GCodeFlavor flavor, bool wait, int tool, std::string comment){
+std::string GCodeWriter::set_temperature(double temperature, GCodeFlavor flavor, bool wait, int tool, std::string comment){
     if (wait && (flavor == gcfMakerWare || flavor == gcfSailfish))
         return "";
 
@@ -334,13 +335,14 @@ std::string GCodeWriter::set_temperature(unsigned int temperature, GCodeFlavor f
     }
 
     std::ostringstream gcode;
+    gcode.imbue(std::locale::classic());
     gcode << code << " ";
     if (flavor == gcfMach3 || flavor == gcfMachinekit) {
         gcode << "P";
     } else {
         gcode << "S";
     }
-    gcode << temperature;
+    gcode << std::setprecision(12) << temperature;
     if (tool != -1) {
         if (flavor == gcfRepRapFirmware) {
             gcode << " P" << tool;

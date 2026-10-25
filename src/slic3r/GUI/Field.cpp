@@ -512,29 +512,32 @@ void Field::get_value_by_opt_type(wxString& str, const bool check_value/* = true
 			m_value = double(m_opt.min);
 			break;
 		}
-        double val;
+        double val = 0.0;
+        const bool adaptive_step = m_opt_id == "adaptive_temperature_step";
 
         bool is_na_value = m_opt.nullable && str == m_na_value;
 
-        const char dec_sep = is_decimal_separator_point() ? '.' : ',';
+        const char dec_sep = adaptive_step || is_decimal_separator_point() ? '.' : ',';
         const char dec_sep_alt = dec_sep == '.' ? ',' : '.';
         // Replace the first incorrect separator in decimal number,
         // if this value doesn't "N/A" value in some language
         if (!is_na_value && str.Replace(dec_sep_alt, dec_sep, false) != 0)
             set_value(str, false);
 
-        if (str == dec_sep)
+        if (str == dec_sep && !adaptive_step)
             val = 0.0;
         else
         {
             if (is_na_value)
                 val = ConfigOptionFloatsNullable::nil_value();
-            else if (!str.ToDouble(&val))
+            else if (!(adaptive_step ? str.ToCDouble(&val) : str.ToDouble(&val)) ||
+                     (adaptive_step && !std::isfinite(val)))
             {
                 if (!check_value) {
                     m_value.clear();
                     break;
                 }
+                if (adaptive_step) val = m_opt.min;
                 show_error(m_parent, _(L("Invalid numeric.")));
                 set_value(double_to_string(val), true);
             }
@@ -1014,6 +1017,18 @@ void TextCtrl::BUILD() {
     temp->SetLabel(_L(m_opt.sidetext));
 	auto text_ctrl = m_opt.multiline ? (wxTextCtrl *)temp : ((TextInput *) temp)->GetTextCtrl();
     text_ctrl->SetValue(text_value);
+    if (m_opt_id == "adaptive_temperature_step") {
+        text_ctrl->Bind(wxEVT_TEXT, [text_ctrl](wxCommandEvent& event) {
+            wxString text = text_ctrl->GetValue();
+            if (text.Replace(",", ".") != 0) {
+                const long insertion_point = text_ctrl->GetInsertionPoint();
+                text_ctrl->ChangeValue(text);
+                text_ctrl->SetInsertionPoint(insertion_point);
+                event.SetString(text);
+            }
+            event.Skip();
+        });
+    }
     temp->SetSize(size);
     m_combine_side_text = !m_opt.multiline;
     if (parent_is_custom_ctrl && m_opt.height < 0)

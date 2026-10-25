@@ -2819,6 +2819,9 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
     bool coordinated_flow = false;
     for (int id : adaptive_used) {
         const size_t index = print->get_filament_config_indx(id, 0, false);
+        if (print->calib_params().mode == CalibMode::Calib_VFA_Tower &&
+            print->config().filament_coordinated_temperature.get_at(index))
+            throw Slic3r::InvalidArgument(_(L("Disable Coordinate flow with nozzle temperature in the filament settings before slicing a VFA test. This option can change the test speeds.")));
         if (print->config().filament_adaptive_temperature.get_at(index)) {
             adaptive_enabled = true;
             coordinated_flow = print->config().filament_coordinated_temperature.get_at(index);
@@ -2828,7 +2831,7 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
     if (adaptive_enabled) {
         if (adaptive_used.size() != 1 || print->config().nozzle_diameter.size() != 1 ||
             print->config().gcode_flavor != gcfKlipper || print->config().print_sequence != PrintSequence::ByLayer ||
-            print->config().spiral_mode || print->config().belt_printer || !print->config().post_process.values.empty())
+            print->config().belt_printer || !print->config().post_process.values.empty())
             throw Slic3r::InvalidArgument(_(L("Adaptive nozzle temperature currently requires one material, one Klipper hotend, layer-by-layer printing, and no external postprocessing.")));
         m_adaptive_provenance = std::make_shared<GCodeProvenance>();
     }
@@ -3018,8 +3021,8 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
             if (!interval.motion.protected_region && interval.motion.layer_id > 1 && interval.motion.heater_id == 0)
                 include_target(interval.motion.target_temperature);
         for (const auto& command : plan.commands) include_target(command.temperature);
-        m_processor.apply_adaptive_temperature_plan(plan, [this](int temperature) {
-            return GCodeWriter::set_temperature(static_cast<unsigned int>(temperature), m_writer.config.gcode_flavor, false, -1, "_ORCA_ADAPTIVE_TEMPERATURE");
+        m_processor.apply_adaptive_temperature_plan(plan, [this](double temperature) {
+            return GCodeWriter::set_temperature(temperature, m_writer.config.gcode_flavor, false, -1, "_ORCA_ADAPTIVE_TEMPERATURE");
         });
         append_adaptive_temperature_report(path_tmp, report, m_processor.result().lines_ends);
         if (coordinated_flow && (plan.limited_by_transition || flow_boundary_limited))

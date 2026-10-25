@@ -3643,14 +3643,14 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(2));
 
-    def = this->add("adaptive_temperature_step", coInt);
+    def = this->add("adaptive_temperature_step", coFloat);
     def->label = L("Temperature command step");
-    def->tooltip = L("Size of an adaptive target change. The planner respects this step, the rise and fall times, and the minimum command interval together.");
+    def->tooltip = L("Size of an adaptive target change, from 0.5 to 5 °C. Decimal commas are converted to decimal points. The planner respects this step, the rise and fall times, and the minimum command interval together.");
     def->sidetext = "°C";
-    def->min = 1;
+    def->min = 0.5;
     def->max = 5;
     def->mode = comExpert;
-    def->set_default_value(new ConfigOptionInt(1));
+    def->set_default_value(new ConfigOptionFloat(1));
 
     def = this->add("filament_settings_id", coStrings);
     def->set_default_value(new ConfigOptionStrings { "" });

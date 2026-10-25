@@ -16,6 +16,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <algorithm>
 #include <fstream>
@@ -63,12 +64,15 @@ TEST_CASE("Native adaptive export changes only nonblocking temperature commands"
     const ScopeGuard restore([original_bbl] { GCodeProcessor::s_IsBBLPrinter = original_bbl; });
     const auto baseline = Test::slice({make_cube(20.0, 20.0, 4.0)}, adaptive_config(false));
     auto enabled = adaptive_config(true);
+    const double step = GENERATE(0.5, 1.0);
+    enabled.set_key_value("adaptive_temperature_step", new ConfigOptionFloat(step));
     Print print;
     Test::init_and_process_print({make_cube(20.0, 20.0, 4.0)}, print, enabled);
     GCodeProcessorResult result;
     const auto adapted = Test::gcode(print, &result);
     CHECK(executable_commands(adapted, false) == executable_commands(baseline, false));
     CHECK(adapted.find("_ORCA_AT_PRIVATE") == std::string::npos);
+    if (step == 0.5) CHECK(adapted.find("M104 S230.5 ; _ORCA_ADAPTIVE_TEMPERATURE") != std::string::npos);
     CHECK(adapted.find("M104 S231") != std::string::npos);
     bool changed_target = false;
     for (const auto& move : result.moves) {
@@ -127,6 +131,7 @@ TEST_CASE("Native coordinated export preserves motion geometry and rebuilds its 
     const bool original_bbl = GCodeProcessor::s_IsBBLPrinter;
     const ScopeGuard restore([original_bbl] { GCodeProcessor::s_IsBBLPrinter = original_bbl; });
     auto config = adaptive_config(true);
+    config.set_key_value("adaptive_temperature_step", new ConfigOptionFloat(GENERATE(0.5, 1.0)));
     config.set_key_value("filament_coordinated_temperature", new ConfigOptionBools{false});
     const auto baseline = Test::slice({make_cube(20, 20, 4)}, config);
     config.set_key_value("filament_coordinated_temperature", new ConfigOptionBools{true});
@@ -221,4 +226,48 @@ TEST_CASE("Macro startup anchors adaptive handoff to the first layer profile", "
     CHECK(result.find("M104 S210") != std::string::npos);
     CHECK(result.find("M104 S260") == std::string::npos);
     CHECK(result.find("_ORCA_ADAPTIVE_TEMPERATURE") != std::string::npos);
+}
+
+TEST_CASE("Spiral vase adaptive temperature preserves executable motion", "[AdaptiveTemperature][GCode]")
+{
+    auto config = adaptive_config(false);
+    config.set_key_value("adaptive_temperature_step", new ConfigOptionFloat(GENERATE(0.5, 1.0)));
+    config.set_deserialize_strict({{"spiral_mode", "1"}, {"wall_loops", "1"},
+        {"top_shell_layers", "0"}, {"bottom_shell_layers", "1"}, {"sparse_infill_density", "0%"}});
+    const bool vfa = GENERATE(false, true);
+    const auto slice = [vfa](const DynamicPrintConfig& settings) {
+        Print print;
+        Test::init_and_process_print({make_cube(20, 20, 4)}, print, settings);
+        if (vfa) {
+            Calib_Params params;
+            params.mode = CalibMode::Calib_VFA_Tower;
+            params.start = 40;
+            params.end = 100;
+            params.step = 10;
+            print.set_calib_params(params);
+        }
+        return Test::gcode(print);
+    };
+    const auto baseline = slice(config);
+    config.set_key_value("filament_adaptive_temperature", new ConfigOptionBools{true});
+    const auto adapted = slice(config);
+    CHECK(executable_commands(adapted, false) == executable_commands(baseline, false));
+    CHECK(adapted.find("M104 S231") != std::string::npos);
+    CHECK(adapted.find("_ORCA_AT_PRIVATE") == std::string::npos);
+}
+
+TEST_CASE("VFA rejects coordinated flow even when temperature adaptation is disabled", "[AdaptiveTemperature][GCode]")
+{
+    auto config = adaptive_config(GENERATE(false, true));
+    config.set_key_value("filament_coordinated_temperature", new ConfigOptionBools{true});
+    Print print;
+    Test::init_and_process_print({make_cube(20, 20, 4)}, print, config);
+    Calib_Params params;
+    params.mode = CalibMode::Calib_VFA_Tower;
+    params.start = 40;
+    params.end = 100;
+    params.step = 10;
+    print.set_calib_params(params);
+    CHECK(print.validate().opt_key == "filament_coordinated_temperature");
+    CHECK_THROWS_WITH(Test::gcode(print), Catch::Matchers::ContainsSubstring("Disable Coordinate flow"));
 }

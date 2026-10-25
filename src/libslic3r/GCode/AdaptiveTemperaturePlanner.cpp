@@ -43,7 +43,9 @@ void validate_adaptive_temperature_settings(const AdaptiveTemperatureSettings& s
         if (!std::isfinite(v) || v < 0.0) throw std::invalid_argument(_u8L("Invalid adaptive-temperature limits"));
     for (double v : {s.rise_time, s.fall_time, s.minimum_command_interval})
         if (!std::isfinite(v) || v <= 0.0) throw std::invalid_argument(_u8L("Adaptive-temperature times must be positive"));
-    if (s.minimum_temperature >= s.maximum_temperature || s.temperature_step < 1 || s.table.size() < 2)
+    if (!std::isfinite(s.temperature_step) || s.temperature_step < 0.5 || s.temperature_step > 5.0)
+        throw std::invalid_argument(_u8L("Temperature command step must be between 0.5 and 5 °C."));
+    if (s.minimum_temperature >= s.maximum_temperature || s.table.size() < 2)
         throw std::invalid_argument(_u8L("Adaptive temperature needs valid limits and at least two table points"));
     double previous = -1.0;
     for (const auto& p : s.table) {
@@ -68,7 +70,7 @@ double temperature_for_flow(double flow, const std::vector<FlowTemperaturePoint>
 
 void plan_region(const std::vector<FlowTimelineInterval>& intervals, size_t begin, size_t end,
                  const AdaptiveTemperatureSettings& s, AdaptiveTemperaturePlan& plan,
-                 std::optional<int>& emitted_target, double& last_command_time)
+                 std::optional<double>& emitted_target, double& last_command_time)
 {
     const double region_start = intervals[begin].motion.start_time;
     const double region_end = intervals[end - 1].end_time();
@@ -166,13 +168,13 @@ void plan_region(const std::vector<FlowTimelineInterval>& intervals, size_t begi
     }
     const auto& first = intervals[begin].motion;
     if (!emitted_target || first.reset_target_before) {
-        emitted_target = static_cast<int>(std::lround(first.target_temperature));
+        emitted_target = first.target_temperature;
         last_command_time = region_start;
     }
     double continuous = *emitted_target;
     if (!std::isfinite(continuous) || continuous < s.minimum_temperature || continuous > s.maximum_temperature)
         throw std::invalid_argument(_u8L("The temperature entering an adaptive region is outside its working limits"));
-    int emitted = *emitted_target;
+    double emitted = *emitted_target;
     double previous_time = region_start;
     for (size_t n = 0; n < candidates.size(); ++n) {
         const auto& motion = intervals[candidates[n]].motion;
@@ -180,8 +182,8 @@ void plan_region(const std::vector<FlowTimelineInterval>& intervals, size_t begi
         continuous = std::clamp(envelope[n], continuous - dt / s.fall_time, continuous + dt / s.rise_time);
         continuous = std::clamp(continuous, s.minimum_temperature, s.maximum_temperature);
         previous_time = motion.start_time;
-        const int direction = continuous >= emitted + s.temperature_step ? 1 :
-                              continuous <= emitted - s.temperature_step ? -1 : 0;
+        const int direction = continuous + 1e-7 >= emitted + s.temperature_step ? 1 :
+                              continuous - 1e-7 <= emitted - s.temperature_step ? -1 : 0;
         const double elapsed = motion.start_time - last_command_time;
         const double required = s.temperature_step * (direction > 0 ? s.rise_time : s.fall_time);
         const bool sustained = direction > 0 ? future_min[n] + 1e-7 >= emitted + s.temperature_step :
@@ -216,7 +218,7 @@ AdaptiveTemperaturePlan plan_adaptive_temperature(const FlowTimeline& timeline, 
     validate_adaptive_temperature_settings(settings);
     AdaptiveTemperaturePlan plan;
     const auto& intervals = timeline.intervals();
-    std::optional<int> emitted_target;
+    std::optional<double> emitted_target;
     double last_command_time = 0.0;
     size_t begin = 0;
     while (begin < intervals.size()) {
@@ -225,7 +227,7 @@ AdaptiveTemperaturePlan plan_adaptive_temperature(const FlowTimeline& timeline, 
         };
         while (begin < intervals.size() && !eligible(intervals[begin].motion)) {
             if (intervals[begin].motion.reset_target_before) {
-                emitted_target = static_cast<int>(std::lround(intervals[begin].motion.target_temperature));
+                emitted_target = intervals[begin].motion.target_temperature;
                 last_command_time = intervals[begin].motion.start_time;
             }
             ++begin;

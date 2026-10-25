@@ -1895,6 +1895,11 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
     if (extruders.empty())
         return { L("No extrusions under current settings.") };
 
+    if (m_calib_params.mode == CalibMode::Calib_VFA_Tower &&
+        std::any_of(m_config.filament_coordinated_temperature.values.begin(),
+                    m_config.filament_coordinated_temperature.values.end(), [](bool enabled) { return enabled; }))
+        return {L("Disable Coordinate flow with nozzle temperature in the filament settings before slicing a VFA test. This option can change the test speeds."), nullptr, "filament_coordinated_temperature"};
+
     for (const PrintObject* object : m_objects) {
         if (!object->config().msao_recovery_enable.value) continue;
         if (m_config.gcode_flavor != gcfKlipper)

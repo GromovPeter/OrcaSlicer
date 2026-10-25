@@ -1356,7 +1356,7 @@ inline constexpr float DEFAULT_FILAMENT_DENSITY = 1.245f;
         FlowTimeline* flow_timeline() { return m_flow_timeline ? &*m_flow_timeline : nullptr; }
         void set_flow_provenance(std::vector<GCodeSection> sections) { m_flow_sections = std::move(sections); }
         void apply_adaptive_temperature_plan(const AdaptiveTemperaturePlan& plan,
-                                            const std::function<std::string(int)>& format_temperature);
+                                            const std::function<std::string(double)>& format_temperature);
         void replay_coordinated_flow(const std::function<void()>& cancel_callback);
         void init_filament_maps_and_nozzle_type_when_import_only_gcode();
         // Reprocessing an already-generated g-code (from-previous / imported g-code) does not rebuild

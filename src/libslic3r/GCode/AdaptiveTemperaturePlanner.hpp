@@ -19,7 +19,7 @@ struct AdaptiveTemperatureSettings
     double fall_time{3.0};
     double additional_lead_time{0.0};
     double minimum_command_interval{2.0};
-    int temperature_step{1};
+    double temperature_step{1.0};
     bool deposition_time_only{false};
 };
 
@@ -27,7 +27,7 @@ struct AdaptiveTemperatureCommand
 {
     unsigned int source_line;
     double time;
-    int temperature;
+    double temperature;
 };
 struct AdaptiveTemperaturePlan
 {

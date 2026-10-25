@@ -850,6 +850,10 @@ VFA_Test_Dlg::VFA_Test_Dlg(wxWindow* parent, wxWindowID id, Plater* plater)
     settings_sizer->AddSpacer(FromDIP(5));
 
     v_sizer->Add(settings_sizer, 0, wxTOP | wxRIGHT | wxLEFT | wxEXPAND, FromDIP(10));
+    auto temperature_warning = new wxStaticText(this, wxID_ANY,
+        _L("Disable Coordinate flow with nozzle temperature in the filament settings before slicing a VFA test. This option can change the test speeds."));
+    temperature_warning->Wrap(FromDIP(440));
+    v_sizer->Add(temperature_warning, 0, wxALL | wxEXPAND, FromDIP(10));
     v_sizer->AddSpacer(FromDIP(5));
 
     auto dlg_btns = new DialogButtons(this, {"OK"});

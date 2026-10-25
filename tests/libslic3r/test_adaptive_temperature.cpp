@@ -3,6 +3,9 @@
 #include "libslic3r/GCode/AdaptiveTemperatureReport.hpp"
 #include "libslic3r/ExtrusionEntity.hpp"
 #include "libslic3r/GCodeReader.hpp"
+#include "libslic3r/GCodeWriter.hpp"
+#include "libslic3r/PrintConfig.hpp"
+#include "libslic3r/Utils.hpp"
 #include "libslic3r/libslic3r.h"
 #include "test_utils.hpp"
 #include <fstream>
@@ -14,6 +17,7 @@
 #include "libslic3r/GCode/GCodeProvenance.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -21,6 +25,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <locale>
 #include <stdexcept>
 #include <vector>
 
@@ -79,16 +84,17 @@ TEST_CASE("Flow temperature tables reject incomplete and unordered data", "[Adap
 TEST_CASE("Target commands obey rise fall and emission limits together", "[AdaptiveTemperature]")
 {
     auto s = settings();
+    s.temperature_step = GENERATE(0.5, 0.6, 1.0);
     FlowTimeline timeline;
     for (unsigned int i = 0; i < 100; ++i) timeline.append(motion(i, 1.0, i < 40 ? 10.0 : 1.0, i + 1));
     const auto plan = plan_adaptive_temperature(timeline, s);
     REQUIRE_FALSE(plan.commands.empty());
     double time = 0.0;
-    int temperature = 230;
+    double temperature = 230;
     bool saw_cooling = false;
     for (const auto& cmd : plan.commands) {
-        const int change = cmd.temperature - temperature;
-        CHECK(std::abs(change) == 1);
+        const double change = cmd.temperature - temperature;
+        CHECK_THAT(std::abs(change), WithinAbs(s.temperature_step, 1e-9));
         CHECK(cmd.time - time + 1e-7 >= s.minimum_command_interval);
         CHECK(cmd.time - time + 1e-7 >= std::abs(change) * (change > 0 ? s.rise_time : s.fall_time));
         CHECK(cmd.temperature >= 220);
@@ -98,7 +104,7 @@ TEST_CASE("Target commands obey rise fall and emission limits together", "[Adapt
         time = cmd.time;
     }
     CHECK(saw_cooling);
-    CHECK(plan.commands.back().temperature == 230);
+    CHECK_THAT(plan.commands.back().temperature, WithinAbs(230.0, 1e-9));
 }
 
 TEST_CASE("Sustained future flow starts the temperature rise in advance", "[AdaptiveTemperature]")
@@ -107,7 +113,7 @@ TEST_CASE("Sustained future flow starts the temperature rise in advance", "[Adap
     for (unsigned int i = 0; i < 70; ++i) timeline.append(motion(i, 1.0, i < 40 ? 1.0 : 10.0, i + 1));
     const auto plan = plan_adaptive_temperature(timeline, settings());
     CHECK(std::any_of(plan.commands.begin(), plan.commands.end(), [](const auto& c) { return c.time < 40.0 && c.temperature > 230; }));
-    int at_transition = 230;
+    double at_transition = 230;
     for (const auto& c : plan.commands) if (c.time <= 40.0) at_transition = c.temperature;
     CHECK(at_transition >= 239);
 }
@@ -122,8 +128,8 @@ TEST_CASE("A time window suppresses short alternating wall flow demand", "[Adapt
     const auto smoothed = plan_adaptive_temperature(timeline, s);
     REQUIRE_FALSE(smoothed.commands.empty());
     REQUIRE_FALSE(unsmoothed.commands.empty());
-    int smooth_peak = 230;
-    int raw_peak = 230;
+    double smooth_peak = 230;
+    double raw_peak = 230;
     for (const auto& c : smoothed.commands) smooth_peak = std::max(smooth_peak, c.temperature);
     for (const auto& c : unsmoothed.commands) raw_peak = std::max(raw_peak, c.temperature);
     CHECK(smooth_peak <= 236);
@@ -201,7 +207,8 @@ TEST_CASE("Short temperature excursions do not create repeated heat cool cycles"
         timeline.append(m);
     }
     const auto plan = plan_adaptive_temperature(timeline, s);
-    int previous = 235, direction = 0;
+    double previous = 235;
+    int direction = 0;
     size_t reversals = 0;
     for (const auto& command : plan.commands) {
         const int next = command.temperature > previous ? 1 : -1;
@@ -222,7 +229,7 @@ TEST_CASE("Sustained heating and cooling survive short excursion suppression", "
     }
     const auto plan = plan_adaptive_temperature(timeline, s);
     CHECK(std::any_of(plan.commands.begin(), plan.commands.end(), [](const auto& c) { return c.time < 40 && c.temperature >= 239; }));
-    CHECK(plan.commands.back().temperature == 230);
+    CHECK_THAT(plan.commands.back().temperature, WithinAbs(230.0, 1e-9));
 }
 
 TEST_CASE("Coordinated flow slows before a sustained flow drop and retains protected speeds", "[AdaptiveTemperature][AdaptiveFlow]")
@@ -384,4 +391,39 @@ TEST_CASE("Constant demand quantization is not reported as a short excursion", "
     const auto plan = plan_adaptive_temperature(timeline, settings());
     CHECK(std::any_of(plan.issues.begin(), plan.issues.end(), [](const auto& issue) { return issue.reason == AdaptiveTemperatureReason::CommandBoundary; }));
     CHECK_FALSE(std::any_of(plan.issues.begin(), plan.issues.end(), [](const auto& issue) { return issue.reason == AdaptiveTemperatureReason::ExcursionFilter; }));
+}
+
+TEST_CASE("Temperature steps reject values below half a degree and nonfinite values", "[AdaptiveTemperature]")
+{
+    auto s = settings();
+    s.temperature_step = GENERATE(0.0, 0.49, -0.5, 5.1,
+        std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN());
+    CHECK_THROWS_AS(validate_adaptive_temperature_settings(s), std::invalid_argument);
+}
+
+TEST_CASE("Fractional starting targets are preserved by temperature planning", "[AdaptiveTemperature]")
+{
+    auto s = settings();
+    s.temperature_step = 0.5;
+    FlowTimeline timeline;
+    for (unsigned int i = 0; i < 50; ++i) {
+        auto m = motion(i, 1.0, 10.0, i + 1);
+        m.target_temperature = 230.25;
+        timeline.append(m);
+    }
+    const auto plan = plan_adaptive_temperature(timeline, s);
+    REQUIRE_FALSE(plan.commands.empty());
+    CHECK_THAT(plan.commands.front().temperature, WithinAbs(230.75, 1e-9));
+}
+
+TEST_CASE("Adaptive temperature commands retain decimals regardless of locale", "[AdaptiveTemperature]")
+{
+    struct CommaDecimal : std::numpunct<char> {
+        char do_decimal_point() const override { return ','; }
+    };
+    const auto previous = std::locale::global(std::locale(std::locale::classic(), new CommaDecimal));
+    const ScopeGuard restore([previous] { std::locale::global(previous); });
+    CHECK(GCodeWriter::set_temperature(230.5, gcfKlipper) == "M104 S230.5 ; set nozzle temperature\n");
+    CHECK(GCodeWriter::set_temperature(230.75, gcfKlipper) == "M104 S230.75 ; set nozzle temperature\n");
+    CHECK(GCodeWriter::set_temperature(230, gcfKlipper) == "M104 S230 ; set nozzle temperature\n");
 }

@@ -1678,3 +1678,19 @@ TEST_CASE("Default options of enum lists get their definition's keys map", "[Con
     }
     CHECK(enum_lists > 0);
 }
+
+TEST_CASE("Adaptive temperature steps load legacy integers and retain fractional values", "[Config][AdaptiveTemperature]")
+{
+    auto config = DynamicPrintConfig::full_print_config();
+    CHECK_THAT(config.opt_float("adaptive_temperature_step"), Catch::Matchers::WithinAbs(1.0, 1e-9));
+    for (const auto text : {"1", "2", "0.5", "0.75"}) {
+        config.set_deserialize_strict("adaptive_temperature_step", text);
+        DynamicPrintConfig loaded;
+        loaded.set_deserialize_strict("adaptive_temperature_step", config.opt_serialize("adaptive_temperature_step"));
+        CHECK_THAT(loaded.opt_float("adaptive_temperature_step"),
+            Catch::Matchers::WithinAbs(config.opt_float("adaptive_temperature_step"), 1e-9));
+        CHECK(config.validate().count("adaptive_temperature_step") == 0);
+    }
+    config.set_deserialize_strict("adaptive_temperature_step", "0.49");
+    CHECK(config.validate().count("adaptive_temperature_step") == 1);
+}

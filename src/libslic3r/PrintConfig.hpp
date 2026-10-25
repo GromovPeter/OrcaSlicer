@@ -2073,7 +2073,7 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionFloat,              adaptive_temperature_smoothing_period))
     ((ConfigOptionFloat,              adaptive_temperature_lead_time))
     ((ConfigOptionFloat,              adaptive_temperature_min_interval))
-    ((ConfigOptionInt,                adaptive_temperature_step))
+    ((ConfigOptionFloat,              adaptive_temperature_step))
     ((ConfigOptionInts,               nozzle_temperature))
     ((ConfigOptionBools,              wipe))
     // BBS

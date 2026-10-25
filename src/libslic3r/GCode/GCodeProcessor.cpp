@@ -2011,7 +2011,7 @@ void GCodeProcessor::run_post_process()
 // fills the map; when the injector produces no lines (no idle windows / no usage blocks) the map is
 // empty and the pass is a byte-for-byte identity rewrite of the finished file.
 void GCodeProcessor::apply_adaptive_temperature_plan(const AdaptiveTemperaturePlan& plan,
-                                                         const std::function<std::string(int)>& format_temperature)
+                                                         const std::function<std::string(double)>& format_temperature)
 {
     if (!m_flow_timeline) throw std::logic_error("Adaptive temperature needs a collected timeline");
     // A commanded firmware flow override is not part of the deposited-volume
@@ -2050,7 +2050,7 @@ void GCodeProcessor::apply_adaptive_temperature_plan(const AdaptiveTemperaturePl
                 bytes += text.size();
                 line_ends.push_back(bytes);
                 offsets.emplace_back(line_id, ++added_lines);
-                targets.push_back({line_id, static_cast<double>(event.temperature)});
+                targets.push_back({line_id, event.temperature});
             }
             output.write(line.data(), static_cast<std::streamsize>(line.size()));
             bytes += line.size();
