@@ -235,7 +235,7 @@ set(output_dlls_Release "")
 set(output_dlls_Debug "")
 set(output_dlls_RelWithDebInfo "")
 # Internal calibration worker, using the bundled Python standard library only.
-foreach(worker loaded_thermal_calibration.py run_loaded_thermal_calibration.py record_hotend_response.py)
+foreach(worker generated_thermal_protocol.py loaded_thermal_calibration.py run_loaded_thermal_calibration.py record_hotend_response.py)
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/../scripts/${worker}"
                    "${SLIC3R_RESOURCES_DIR}/calibration/${worker}" COPYONLY)
 endforeach()

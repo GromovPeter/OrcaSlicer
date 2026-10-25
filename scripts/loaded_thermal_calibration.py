@@ -44,7 +44,9 @@ def fit_sensor_step(samples, old_target, new_target):
 
 
 class LoadedCalibration:
-    def __init__(self, hold_s=10, timeout_s=90, flow_window_s=5):
+    def __init__(self, hold_s=10, timeout_s=90, flow_window_s=5, stages=PLA_STAGES):
+        self.stages = tuple(stages)
+        if not self.stages: raise ValueError("Calibration stages are empty")
         self.hold_s, self.timeout_s, self.flow_window_s = hold_s, timeout_s, flow_window_s
         self.index = -1
         self.started = self.last_time = self.stable_since = None
@@ -56,7 +58,7 @@ class LoadedCalibration:
 
     @property
     def stage(self):
-        return PLA_STAGES[self.index] if self.index >= 0 and not self.done else None
+        return self.stages[self.index] if self.index >= 0 and not self.done else None
 
     def start(self, time_s):
         if self.index != -1 or not math.isfinite(time_s):
@@ -92,7 +94,7 @@ class LoadedCalibration:
             integral = sum(0.5 * (a[1] + b[1]) * (b[0] - a[0])
                            for a, b in zip(self.flow_samples, list(self.flow_samples)[1:]))
             mean_flow = integral / span
-        flow_tolerance=max(0.1,0.1*self.stage.flow)
+        flow_tolerance=0.1*self.stage.flow
         if commanded_flow<=0.05 or (mean_flow is not None and abs(mean_flow-self.stage.flow)>flow_tolerance):
             self.load_disrupted=True
         stable = mean_flow is not None and abs(mean_flow - self.stage.flow) <= flow_tolerance
@@ -125,7 +127,7 @@ class LoadedCalibration:
         self.started = time_s
         self.stable_since = None
         self.flow_samples.clear()
-        if self.index == len(PLA_STAGES):
+        if self.index == len(self.stages):
             self.done = True
             return 'complete'
         return self.stage

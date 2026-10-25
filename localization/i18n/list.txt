@@ -409,3 +409,5 @@ src/slic3r/GUI/LoadedThermalCalibrationDialog.cpp
 
 src/libslic3r/InterlayerAdhesionCalibration.cpp
 src/slic3r/GUI/AdhesionCalibrationDialog.cpp
+
+src/libslic3r/LoadedThermalCalibration.cpp

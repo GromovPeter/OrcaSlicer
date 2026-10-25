@@ -1,11 +1,22 @@
 #include "LoadedThermalCalibrationDialog.hpp"
 #include "HotendThermalResponse.hpp"
 #include "I18N.hpp"
+#include "GUI_App.hpp"
+#include "libslic3r/Config.hpp"
+#include "libslic3r/LoadedThermalCalibration.hpp"
+#include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/Utils.hpp"
 #include "slic3r/plugin/PythonInterpreter.hpp"
 #include <boost/nowide/fstream.hpp>
 #include <nlohmann/json.hpp>
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstddef>
+#include <future>
+#include <ios>
+#include <stdexcept>
+#include <utility>
 #include <exception>
 #include <memory>
 #include <string>
@@ -18,6 +29,7 @@
 #include <wx/dialog.h>
 #include <wx/event.h>
 #include <wx/filedlg.h>
+#include <wx/filename.h>
 #include <wx/filefn.h>
 #include <wx/gdicmn.h>
 #include <wx/msgdlg.h>
@@ -34,7 +46,7 @@
 
 namespace Slic3r { namespace GUI {
 namespace {
-const wxString fixture_name = "ORCA_PLA_LOADED_CALIBRATION_20261021_v2.gcode";
+
 
 bool write_signal(const wxString& path, const std::string& value)
 {
@@ -46,6 +58,79 @@ bool write_signal(const wxString& path, const std::string& value)
 
 class LoadedThermalDialog : public wxDialog {
     wxTimer m_timer{this};
+    std::array<wxTextCtrl*,6> m_parameters{};
+    wxButton* m_generate{};
+    wxButton* m_select{};
+    wxTextCtrl* m_conditions{};
+    wxString m_fixture;
+    wxString m_pending_fixture;
+    std::future<LoadedThermalPlan> m_generation;
+
+    DynamicPrintConfig current_config() const
+    {
+        auto* bundle=wxGetApp().preset_bundle;
+        if(!bundle || bundle->filament_presets.size()!=1)
+            throw std::invalid_argument(_u8L("Use one filament slot for loaded thermal calibration."));
+        return bundle->full_config();
+    }
+
+    LoadedThermalInput input() const
+    {
+        std::array<double,6> values{};
+        for(size_t i=0;i<values.size();++i) {
+            wxString text=m_parameters[i]->GetValue();text.Replace(",",".");
+            m_parameters[i]->ChangeValue(text);
+            if(!text.ToCDouble(&values[i])) throw std::invalid_argument(_u8L("Enter a number in each calibration field."));
+        }
+        return {values[0],values[1],values[2],values[3],values[4],values[5]};
+    }
+
+    void generate()
+    {
+        if(m_process || m_generation.valid()) return;
+        try {
+            auto config=current_config();
+            const auto plan=plan_loaded_thermal_calibration(config,input());
+            m_conditions->SetValue(wxString::FromUTF8(plan.description));
+            wxFileDialog output(this,_L("Save generated thermal calibration G-code"),"","ORCA_THERMAL_RESPONSE.gcode",
+                "G-code (*.gcode)|*.gcode",wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
+            if(output.ShowModal()!=wxID_OK) return;
+            m_pending_fixture=output.GetPath();
+            const std::string path=m_pending_fixture.ToUTF8().data();
+            m_generation=std::async(std::launch::async,[config=std::move(config),plan,path] {
+                export_loaded_thermal_calibration(config,plan,path);
+                return plan;
+            });
+            m_ready->SetValue(false);
+            set_status(_L("Generating and slicing the calibration for the current printer and filament..."));
+            set_running(false);m_timer.Start(250);
+        } catch(const std::exception& error) {
+            wxMessageBox(wxString::FromUTF8(error.what()),_L("Cannot prepare calibration"),wxOK|wxICON_ERROR,this);
+        }
+    }
+
+    void select_fixture(const wxString& path)
+    {
+        m_ready->SetValue(false);
+        try {
+            boost::nowide::ifstream source(path.ToUTF8().data(),std::ios::binary);
+            std::string line;std::getline(source,line);
+            const std::string marker="; _ORCA_LOADED_THERMAL_V1 ";
+            if(!source || line.size()>65536 || line.rfind(marker,0)!=0)
+                throw std::invalid_argument(_u8L("Choose an Orca-generated loaded thermal calibration file."));
+            const auto metadata=nlohmann::json::parse(line.substr(marker.size()));
+            if(metadata.value("version",0)!=1 || metadata.value("kind",std::string{})!="orca_loaded_thermal")
+                throw std::invalid_argument(_u8L("Unsupported calibration protocol."));
+            m_fixture=path;
+            m_conditions->SetValue(wxString::FromUTF8(metadata.value("description",std::string{})));
+            m_filename->SetValue(wxFileName(path).GetFullName());
+            set_status(wxString::Format(_L("Calibration file: %s\nTransfer this exact file and start it yourself. Check its conditions before recording."),path));
+        } catch(const std::exception& error) {
+            m_fixture.clear();
+            wxMessageBox(wxString::FromUTF8(error.what()),_L("Cannot prepare calibration"),wxOK|wxICON_ERROR,this);
+        }
+        set_running(false);
+    }
     std::unique_ptr<wxProcess> m_process;
     wxTextCtrl* m_url;
     wxTextCtrl* m_filename;
@@ -72,14 +157,17 @@ class LoadedThermalDialog : public wxDialog {
 
     void set_running(bool running)
     {
-        m_start->Enable(!running && m_ready->GetValue());
+        const bool busy=running || m_generation.valid();
+        m_start->Enable(!busy && !m_fixture.empty() && m_ready->GetValue());
+        m_generate->Enable(!busy);m_select->Enable(!busy);
+        for(auto* field:m_parameters) field->Enable(!busy);
         m_stop->Enable(running && !m_stopping);
         m_analyze->Enable(!running && !m_output.empty() && wxFileExists(m_output));
-        m_import->Enable(!running);
-        m_url->Enable(!running);
-        m_filename->Enable(!running);
-        m_ready->Enable(!running);
-        m_close->Enable(!running);
+        m_import->Enable(!busy);
+        m_url->Enable(!busy);
+        m_filename->Enable(!busy);
+        m_ready->Enable(!busy && !m_fixture.empty());
+        m_close->Enable(!busy);
     }
 
     void request_stop()
@@ -113,7 +201,7 @@ class LoadedThermalDialog : public wxDialog {
             else if (state == "stopping" || m_stopping)
                 set_status(_L("Stopping: waiting for cancellation, heaters off and speed restoration to be confirmed..."));
             else if (state == "waiting")
-                set_status(_L("Recording: waiting for the prepared print to reach layer 7, the measurement height and steady cooling."));
+                set_status(_L("Recording: waiting for the generated print to finish its warmup layers and reach the measurement region with steady cooling."));
             else if (state == "running")
                 set_status(wxString::Format(_L("Stage %d / %d; nozzle %.1f C; target %.1f C; requested flow %.1f mm3/s"),
                     progress.at("stage").get<int>(), progress.at("total").get<int>(),
@@ -125,7 +213,7 @@ class LoadedThermalDialog : public wxDialog {
 
     void start()
     {
-        if (m_process || !m_ready->GetValue()) return;
+        if (m_process || m_generation.valid() || m_fixture.empty() || !m_ready->GetValue()) return;
         const auto python = PythonInterpreter::bundled_python_executable();
         const wxString worker = wxString::FromUTF8(resources_dir()) + "/calibration/run_loaded_thermal_calibration.py";
         if (python.empty() || !wxFileExists(worker)) {
@@ -153,7 +241,7 @@ class LoadedThermalDialog : public wxDialog {
         }
         // wxExecute's argument-vector overload avoids shell parsing, including spaces and Unicode paths.
         std::vector<wxString> arguments{wxString::FromUTF8(python), "-B", "-u", "-X", "utf8", worker,
-            "--url", m_url->GetValue(), "--filename", m_filename->GetValue(), "--output", m_output,
+            "--url", m_url->GetValue(), "--filename", m_filename->GetValue(), "--fixture", m_fixture, "--output", m_output,
             "--stop-file", m_stop_path, "--heartbeat-file", m_heartbeat, "--progress-json", m_progress,
             "--log-file", path + ".worker.log", "--verify-upload", "--execute"};
         std::vector<const wxChar*> argv;
@@ -183,20 +271,34 @@ public:
             label->Wrap(FromDIP(700));
             layout->Add(label, 0, wxEXPAND | wxALL, FromDIP(8));
         };
-        add_text(_L("Measure the hotend while printing a continuous spiral. This prepared protocol is for K2PRO, PLA 1.75 mm, a 0.4 mm nozzle and Textured PEI Plate at 50 C. It uses the fixed table 1 mm3/s at 196 C, 10 at 213 C and 22 at 228 C; it does not use the currently selected filament table."));
-        add_text(_L("1. Save the prepared G-code, transfer it to the printer and start it yourself with the original filename. Start recording here while its initial layers are printing. The recorder verifies the uploaded file and waits for the measurement region."));
-        auto* prepare = new wxButton(page, wxID_ANY, _L("Save K2PRO PLA calibration G-code..."));
-        layout->Add(prepare, 0, wxALL, FromDIP(8));
-        prepare->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-            wxDirDialog folder(this, _L("Choose the calibration G-code folder"));
-            if (folder.ShowModal() != wxID_OK) return;
-            const wxString source = wxString::FromUTF8(resources_dir()) + "/calibration/" + fixture_name;
-            const wxString destination = folder.GetPath() + "/" + fixture_name;
-            if (!wxCopyFile(source, destination, false))
-                wxMessageBox(_L("Cannot save the calibration file. Choose a writable folder without an existing file of that name."), _L("Cannot prepare calibration"), wxOK | wxICON_ERROR, this);
-            else
-                wxMessageBox(wxString::Format(_L("Saved: %s\nStart this file as a separate print, then start recording here. Do not reslice or rename it."), destination), _L("Calibration file prepared"), wxOK | wxICON_INFORMATION, this);
+        add_text(_L("Generate a continuous spiral using the selected printer, nozzle, filament, plate and process. Start/end G-code and bed temperatures come from those presets. Recording supports one Klipper hotend through Moonraker. Calibration uses fixed part cooling and disables adaptive temperature/flow, layer-time slowdown and custom layer-change scripts in this file."));
+        auto* parameters=new wxFlexGridSizer(2,FromDIP(5),FromDIP(10));parameters->AddGrowableCol(1);
+        const std::array<wxString,6> labels{{_L("Low temperature (C)"),_L("Reference temperature (C)"),_L("High temperature (C)"),
+            _L("Low flow (mm3/s)"),_L("Reference flow (mm3/s)"),_L("High flow (mm3/s)")}};
+        for(size_t i=0;i<labels.size();++i) {
+            parameters->Add(new wxStaticText(page,wxID_ANY,labels[i]),0,wxALIGN_CENTER_VERTICAL);
+            m_parameters[i]=new wxTextCtrl(page,wxID_ANY,"");parameters->Add(m_parameters[i],1,wxEXPAND);
+        }
+        layout->Add(parameters,0,wxEXPAND|wxALL,FromDIP(8));
+        m_conditions=new wxTextCtrl(page,wxID_ANY,"",wxDefaultPosition,FromDIP(wxSize(700,105)),wxTE_MULTILINE|wxTE_READONLY);
+        layout->Add(m_conditions,0,wxEXPAND|wxALL,FromDIP(8));
+        add_text(_L("1. Review the test temperatures and flows, then generate the G-code. Transfer and start it yourself. To record a file generated earlier, select its local copy; the recorder verifies its embedded protocol and exact uploaded checksum before controlling the printer."));
+        m_generate=new wxButton(page,wxID_ANY,_L("Generate from current presets..."));
+        m_select=new wxButton(page,wxID_ANY,_L("Select generated calibration G-code..."));
+        layout->Add(m_generate,0,wxALL,FromDIP(8));layout->Add(m_select,0,wxALL,FromDIP(8));
+        m_generate->Bind(wxEVT_BUTTON,[this](wxCommandEvent&){generate();});
+        m_select->Bind(wxEVT_BUTTON,[this](wxCommandEvent&){
+            wxFileDialog file(this,_L("Select generated calibration G-code"),"","","G-code (*.gcode)|*.gcode",wxFD_OPEN|wxFD_FILE_MUST_EXIST);
+            if(file.ShowModal()==wxID_OK) select_fixture(file.GetPath());
         });
+        try {
+            const auto config=current_config();const auto a=loaded_thermal_defaults(config);
+            const std::array<double,6> values{{a.low_temperature,a.reference_temperature,a.high_temperature,a.low_flow,a.reference_flow,a.high_flow}};
+            for(size_t i=0;i<values.size();++i) m_parameters[i]->ChangeValue(wxString::FromCDouble(values[i],3));
+            m_conditions->SetValue(wxString::FromUTF8(plan_loaded_thermal_calibration(config,a).description));
+        } catch(const std::exception& error) {
+            m_conditions->SetValue(wxString::FromUTF8(error.what()));
+        }
         add_text(_L("2. Recording controls temperature and speed through Moonraker. Nine stages check actual settling under commanded extrusion load. At completion, Stop, or failure it attempts to restore speed and cancel only the verified calibration job, then checks that both heaters are off. Keep the printer supervised; use its interface if the connection fails."));
         auto* fields = new wxFlexGridSizer(2, FromDIP(6), FromDIP(12));
         fields->AddGrowableCol(1);
@@ -204,10 +306,10 @@ public:
         m_url = new wxTextCtrl(page, wxID_ANY, wxEmptyString);
         fields->Add(m_url, 1, wxEXPAND);
         fields->Add(new wxStaticText(page, wxID_ANY, _L("Printer file path")), 0, wxALIGN_CENTER_VERTICAL);
-        m_filename = new wxTextCtrl(page, wxID_ANY, fixture_name);
+        m_filename = new wxTextCtrl(page, wxID_ANY, "");
         fields->Add(m_filename, 1, wxEXPAND);
         layout->Add(fields, 0, wxEXPAND | wxALL, FromDIP(8));
-        m_ready = new wxCheckBox(page, wxID_ANY, _L("I checked these conditions; the prepared K2PRO PLA print is running."));
+        m_ready = new wxCheckBox(page, wxID_ANY, _L("I checked the generated file and its conditions; that calibration print is running."));
         layout->Add(m_ready, 0, wxALL, FromDIP(8));
         m_ready->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { set_running(bool(m_process)); });
         auto* actions = new wxBoxSizer(wxHORIZONTAL);
@@ -234,8 +336,9 @@ public:
         outer->Add(page, 1, wxEXPAND);
         m_close = new wxButton(this, wxID_CANCEL, _L("Close"));
         outer->Add(m_close, 0, wxALIGN_RIGHT | wxALL, FromDIP(10));
-        m_close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { if (!m_process) EndModal(wxID_CANCEL); });
+        m_close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { if (!m_process && !m_generation.valid()) EndModal(wxID_CANCEL); });
         Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& event) {
+            if (m_generation.valid() && event.CanVeto()) {event.Veto();return;}
             if (m_process) {
                 request_stop();
                 if (event.CanVeto()) { event.Veto(); return; }
@@ -244,9 +347,21 @@ public:
         });
         // Escape is a request to stop, never a way to destroy an active controller.
         Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-            if (m_process) request_stop(); else EndModal(wxID_CANCEL);
+            if (m_process) request_stop(); else if (!m_generation.valid()) EndModal(wxID_CANCEL);
         }, wxID_CANCEL);
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+            if(m_generation.valid()) {
+                if(m_generation.wait_for(std::chrono::seconds(0))!=std::future_status::ready) return;
+                m_timer.Stop();
+                try {
+                    const auto plan=m_generation.get();
+                    m_conditions->SetValue(wxString::FromUTF8(plan.description));
+                    select_fixture(m_pending_fixture);
+                } catch(const std::exception& error) {
+                    set_status(wxString::FromUTF8(error.what()));set_running(false);
+                }
+                return;
+            }
             if (!write_signal(m_heartbeat, std::to_string(++m_tick))) request_stop();
             read_progress();
         });

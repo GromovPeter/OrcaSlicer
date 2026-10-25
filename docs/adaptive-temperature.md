@@ -18,7 +18,7 @@ overhang recovery disabled. Existing profiles do not need these features.
 - Optional feedrate reduction when planned thermal transitions need more time.
 - A native preview and an adaptive-temperature report for the current slice.
 - Thermal-response CSV analysis with explicit application to a printer preset.
-- A prepared K2PRO/PLA under-load measurement workflow through Moonraker.
+- A preset-specific under-load measurement workflow through Moonraker.
 - A native spiral-cylinder interlayer adhesion calibration with a height map.
 - The original CrealityPrint v7.1.0 under-extrusion recovery filter.
 
@@ -105,28 +105,32 @@ are explicit actions; importing a CSV alone does not alter a saved preset.
 
 The under-load recording workflow is a separate action within that window:
 
-1. Read the displayed fixture conditions before saving its prepared G-code.
-2. Transfer and start the calibration print yourself, retaining the original name.
-3. Enter your own Moonraker URL, for example `http://printer.local:7125`, and the
-   printer's file path. The public build has no prefilled printer address.
-4. Confirm the conditions and running print, then choose **Start recording**.
-5. Analyze the recorded CSV and review proposed values before applying them.
+1. Select one filament slot and the intended Klipper printer, nozzle, plate and process.
+2. Review the proposed low/reference/high temperatures and flows. Defaults use the
+   filament temperature range, nozzle temperature and maximum volumetric speed;
+   an existing flow/temperature table also constrains the targets.
+3. Choose **Generate from current presets** to slice a continuous spiral cylinder.
+   Its start/end G-code and bed temperatures come from the selected presets.
+   Dimensions account for the bed, nozzle, filament diameter and machine limits.
+4. Transfer and start the exact file yourself. The dialog shows the file name;
+   enter its actual remote path and your Moonraker URL.
+5. Confirm the file and conditions, then choose **Start recording**. A previously
+   generated file can be selected using its local copy.
+6. Analyze the CSV and review proposals before applying or saving printer settings.
 
-The prepared fixture is specific to K2PRO, PLA 1.75 mm, a 0.4 mm nozzle,
-Textured PEI at 50 °C, and its displayed fixed flow/temperature protocol.
-It does not generate a protocol from the currently selected filament table.
-It expects the printer's existing `START_PRINT` and `LINE_PURGE` macros and `T0`;
-the public fixture supplies no individual Z-offset override or embedded preset.
-Review macro compatibility and the printer's calibrated Z offset before use.
-It is not a generic printer calibration file.
+The calibration file uses fixed part cooling from the filament maximum fan setting,
+replaces layer-change scripts with Klipper statistics, and disables layer-time
+slowdown, adaptive temperature/flow and overhang recovery. Selected presets and
+current plate contents are not modified. Generation and CSV import do not send
+printer commands. Unsupported hardware or tests that do not fit fail explicitly.
 
-Recording verifies the exact uploaded file checksum and active job identity.
-It changes that job's temperature and speed, and attempts guarded cancellation
-and speed restoration on completion, Stop or failure. Supervise the experiment;
-network failure can prevent confirmation of cancellation. Authentication can
-use `MOONRAKER_API_KEY` from the environment. The recorder does not upload or
-start a print. The public fixture checksum differs from the private development
-fixture; use the fixture and worker from the same checkout/build.
+Recording verifies the generated protocol and complete uploaded-file checksum.
+It discovers stock Klipper fan telemetry or Creality fan pins and monitors cooling
+conditions. It changes the verified job's temperature and speed, and attempts
+cancellation and speed restoration on completion, Stop or failure. Supervise the
+experiment; network failure can prevent confirmation. Authentication can use
+`MOONRAKER_API_KEY` from the environment. The recorder does not upload or start a
+print. Sensor response is not melt-temperature measurement.
 
 The separate `scripts/record_hotend_response.py` helper only performs read-only
 Moonraker queries. It is different from the controlling under-load worker.

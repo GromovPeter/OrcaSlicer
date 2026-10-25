@@ -55,7 +55,7 @@ Keep the application's `resources` directory, DLLs and bundled Python runtime
 with the executable. Launching an isolated EXE copied out of the build is not
 a complete installation. Follow the upstream installation/package layout.
 
-During CMake configuration, the three canonical Python worker files in
+During CMake configuration, the canonical Python calibration workers and shared protocol module in
 `scripts/` are copied to `resources/calibration/`. Those generated copies are
 ignored by Git. Reconfigure after editing the canonical workers so the copies
 used by the application are current. The GUI uses the bundled runtime; worker

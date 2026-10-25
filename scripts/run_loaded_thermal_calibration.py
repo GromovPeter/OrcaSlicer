@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Control ONLY the prepared continuous spiral calibration print.
+"""Control ONLY a verified continuous spiral calibration print.
 Requires explicit --execute. Does not upload or start a print or install macros.
 """
 import argparse
@@ -17,6 +17,7 @@ from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 from record_hotend_response import read_json
 from loaded_thermal_calibration import LoadedCalibration, PLA_STAGES
+import generated_thermal_protocol as generated
 
 FILENAME = 'ORCA_PLA_LOADED_CALIBRATION_20261021_v2.gcode'
 
@@ -51,11 +52,16 @@ def post(base, path, body, key):
     if 'error' in document: raise RuntimeError('Moonraker rejected the calibration command')
 
 
-def query(base, key):
+def query(base, key, cooling=None, has_bed=True):
     objects = {'print_stats':'state,filename,info','pause_resume':'is_paused','extruder':'temperature,target,power',
                'motion_report':'live_extruder_velocity,live_position','gcode_move':'extrude_factor,speed_factor',
                'heater_bed':'temperature,target','virtual_sdcard':'layer,layer_count,is_active'}
-    objects.update({'output_pin '+p:'value' for p in ('fan0','fan1','fan2','fan0_en')})
+    if cooling is None:
+        objects.update({'output_pin '+p:'value' for p in ('fan0','fan1','fan2','fan0_en')})
+    else:
+        objects['virtual_sdcard']='is_active'
+        objects.update(cooling)
+        if not has_bed:objects.pop("heater_bed",None)
     return read_json(base, '/printer/objects/query?' + urlencode(objects), key)
 
 
@@ -77,13 +83,14 @@ def cancellation_confirmed(status, filename):
     return (job.get('filename') == filename and job.get('state') == 'cancelled' and
             status.get('virtual_sdcard', {}).get('is_active') is False and
             status.get('extruder', {}).get('target') == 0 and
-            status.get('heater_bed', {}).get('target') == 0 and
+            status.get('heater_bed', {}).get('target', 0) == 0 and
             abs(status.get('gcode_move', {}).get('speed_factor', -1) - 1) < .001)
 
 
-def stop_calibration(base, filename, key, confirmation_timeout_s=90):
+def stop_calibration(base, filename, key, confirmation_timeout_s=90, query_fn=None):
+    fetch = query if query_fn is None else query_fn
     # Recheck identity before canceling: never stop a replacement/ordinary job.
-    current = query(base, key)['status']
+    current = fetch(base, key)['status']
     if cancellation_confirmed(current, filename):
         return current
     job = current.get('print_stats', {})
@@ -103,7 +110,7 @@ def stop_calibration(base, filename, key, confirmation_timeout_s=90):
     deadline = time.monotonic() + confirmation_timeout_s
     while True:
         try:
-            current = query(base, key)['status']
+            current = fetch(base, key)['status']
         except (TimeoutError, OSError):
             current = None
         if current is not None:
@@ -157,9 +164,20 @@ def write_progress(path, state, **values):
             pass
 
 
-def verify_uploaded_fixture(base, filename, key):
+def verify_uploaded_fixture(base, filename, key, expected=None):
     headers = {'X-Api-Key': key} if key else {}
     with urlopen(Request(base.rstrip('/') + '/server/files/gcodes/' + quote(filename, safe='/'), headers=headers), timeout=5) as reply:
+        if expected is not None:
+            digest=hashlib.sha256();count=0
+            while True:
+                chunk=reply.read(1024*1024)
+                if not chunk:break
+                count+=len(chunk)
+                if count>generated.MAX_FILE_BYTES:raise RuntimeError('Uploaded calibration file is too large')
+                digest.update(chunk)
+            if count != expected['bytes'] or digest.hexdigest() != expected['sha256']:
+                raise RuntimeError('Uploaded calibration file differs from the locally generated file')
+            return
         data = reply.read(2 * 1024 * 1024)
     if hashlib.sha256(data).hexdigest() != FIXTURE_SHA256:
         raise RuntimeError('Uploaded calibration file differs from the supplied fixture')
@@ -168,9 +186,18 @@ def verify_uploaded_fixture(base, filename, key):
 def run(args):
     guard=OwnerGuard(args.stop_file,args.heartbeat_file)
     guard.check()
-    if args.verify_upload:
-        verify_uploaded_fixture(args.url,args.filename,os.environ.get("MOONRAKER_API_KEY"))
-    return run_measurement(args,guard)
+    protocol=generated.load_fixture(args.fixture) if getattr(args,'fixture',None) else None
+    if protocol is not None or args.verify_upload:
+        if protocol is not None:
+            verify_uploaded_fixture(args.url,args.filename,os.environ.get("MOONRAKER_API_KEY"),protocol)
+        else:
+            verify_uploaded_fixture(args.url,args.filename,os.environ.get("MOONRAKER_API_KEY"))
+    if protocol is not None:
+        names=read_json(args.url,'/printer/objects/list',os.environ.get('MOONRAKER_API_KEY'))['objects']
+        protocol['cooling'],protocol['part_fan']=generated.cooling_objects(names)
+        protocol['has_bed']='heater_bed' in names
+        args.filament_diameter=protocol['filament_diameter']
+    return run_measurement(args,guard,protocol)
 
 
 def main():
@@ -179,6 +206,7 @@ def main():
     parser.add_argument('--filename', default=FILENAME)
     parser.add_argument('--output', required=True, help='New raw CSV, never overwritten')
     parser.add_argument('--filament-diameter', type=float, default=1.75)
+    parser.add_argument('--fixture', help='Local Orca-generated G-code used to verify the uploaded file and protocol')
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--stop-file')
     parser.add_argument('--heartbeat-file')
@@ -187,14 +215,14 @@ def main():
     parser.add_argument('--verify-upload', action='store_true')
     args=parser.parse_args()
     if not args.execute: parser.error('Review the prepared print and pass --execute to control its temperatures and M220')
-    if PurePosixPath(args.filename).name != FILENAME: parser.error('Only the named calibration fixture is supported')
+    if not args.fixture and PurePosixPath(args.filename).name != FILENAME: parser.error('Only the named calibration fixture is supported')
     if not math.isfinite(args.filament_diameter) or not 1 <= args.filament_diameter <= 3:
         parser.error('Invalid filament diameter')
     parsed=urlsplit(args.url)
     if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         parser.error('Use an HTTP(S) base URL without credentials')
     if Path(args.output+'.summary.json').exists():parser.error('Summary output already exists')
-    if abs(args.filament_diameter-1.75)>.001:parser.error('Prepared fixture uses 1.75 mm filament')
+    if not args.fixture and abs(args.filament_diameter-1.75)>.001:parser.error('Prepared fixture uses 1.75 mm filament')
     if args.log_file:
         with open(args.log_file,'x',encoding='utf-8') as log, contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
             return execute(args)
@@ -218,52 +246,79 @@ def execute(args):
         return 1
 
 
-def run_measurement(args,guard):
+def run_measurement(args,guard,protocol=None):
+    fetch=(lambda base,key:query(base,key,protocol['cooling'],protocol['has_bed'])) if protocol else query
+    command=(lambda stage:generated.stage_commands(stage,protocol)) if protocol else stage_commands
+    def cancel():
+        return stop_calibration(args.url,args.filename,key,query_fn=fetch) if protocol else stop_calibration(args.url,args.filename,key)
+    cooling_baseline=None
     area=math.pi*(args.filament_diameter/2)**2
     key=os.environ.get('MOONRAKER_API_KEY')
-    c=LoadedCalibration()
+    c=LoadedCalibration(timeout_s=protocol["stage_timeout_s"],stages=generated.stages(protocol)) if protocol else LoadedCalibration()
     first=None; activated=False; job_verified=False; waiting_target_since=None
     layers_initialized=False; cleanup_attempted=False; cleanup_status=None; cleanup_error=None
     write_progress(args.progress_json,'waiting')
     with open(args.output,'x',newline='',encoding='utf-8') as f:
         f.write('# Under-load calibration. requested_flow is derived from Klipper commanded extruder velocity, not measured melt flow.\n')
         f.write('# flow_mm3_s deliberately unset: raw varying commanded flow must not be accepted as constant deposition by the B2a importer.\n')
+        cooling_columns=sorted(protocol['cooling']) if protocol else []
+        if protocol:f.write('# generated_protocol='+json.dumps(protocol,allow_nan=False)+'\n')
         writer=csv.writer(f)
         writer.writerow(['time_s','target_c','temperature_c','power','fan','flow_mm3_s','requested_flow_mm3_s',
-                         'pin_fan1','pin_fan2','bed_c','stage'])
+                         'pin_fan1','pin_fan2','bed_c','stage']+['cooling:'+name for name in cooling_columns])
         started=time.monotonic()
         try:
-            while time.monotonic()-started < 600:
+            while time.monotonic()-started < (protocol['total_timeout_s'] if protocol else 600):
                 guard.check()
-                received=query(args.url,key);s=received['status'];event=float(received['eventtime'])
+                received=fetch(args.url,key);s=received['status'];event=float(received['eventtime'])
                 require_calibration_job(s,args.filename)
                 job_verified=True
                 motion=s['motion_report'];hot=s['extruder']
                 if first is None:first=event
-                pins={p:s.get('output_pin '+p,{}).get('value') for p in ('fan0','fan1','fan2','fan0_en')}
-                if any(v is None for v in pins.values()):raise RuntimeError('Fan state unavailable')
+                if protocol:
+                    cooling=generated.fan_values(s,protocol['cooling'])
+                    pins={'fan0':cooling[protocol['part_fan']], 'fan0_en':1.0,
+                          'fan1':cooling.get('output_pin fan1',cooling.get('fan_generic chamber',0.0)),
+                          'fan2':cooling.get('output_pin fan2',cooling.get('fan_generic auxiliary',0.0))}
+                else:
+                    pins={p:s.get('output_pin '+p,{}).get('value') for p in ('fan0','fan1','fan2','fan0_en')}
+                    if any(v is None for v in pins.values()):raise RuntimeError('Fan state unavailable')
                 velocity=float(motion['live_extruder_velocity']);flow=velocity*area
                 if not all(math.isfinite(v) for v in (event,flow,float(hot['temperature']),float(hot['target']))):
                     raise RuntimeError('Invalid telemetry')
                 writer.writerow([event-first,hot['target'],hot['temperature'],hot.get('power',''),pins['fan0'],'',flow,
-                                 pins['fan1'],pins['fan2'],s.get('heater_bed',{}).get('temperature',''),c.stage.name if c.stage else 'first_layers'])
+                                 pins['fan1'],pins['fan2'],s.get('heater_bed',{}).get('temperature',''),c.stage.name if c.stage else 'first_layers']+
+                                [cooling[name] for name in cooling_columns])
                 f.flush()
                 if not activated:
                     if not layers_initialized:
-                        layers_initialized=initialize_layer_statistics(args.url,args.filename,key,s)
+                        if protocol:
+                            post(args.url,'/printer/gcode/script',{'script':f'SET_PRINT_STATS_INFO TOTAL_LAYER={protocol["total_layers"]}'},key)
+                            layers_initialized=True
+                        else:
+                            layers_initialized=initialize_layer_statistics(args.url,args.filename,key,s)
                     # Leave bottom, brim, initial cooling ramp and start macros untouched.
                     write_progress(args.progress_json,'waiting',temperature=float(hot['temperature']))
-                    if not first_layers_ready(s,flow,pins):
+                    ready=generated.first_layers_ready(s,flow,protocol) if protocol else first_layers_ready(s,flow,pins)
+                    if not ready:
                         time.sleep(.5);continue
-                    if any(abs(pins[p])>.02 for p in ('fan1','fan2')) or abs(pins['fan0_en']-1)>.02:
+                    if protocol:
+                        if abs(pins['fan0']-protocol['fan'])>.02:time.sleep(.5);continue
+                        if protocol['fan']>0 and 'output_pin fan0_en' in cooling and abs(cooling['output_pin fan0_en']-1)>.02:
+                            raise RuntimeError('Part cooling output is disabled')
+                        cooling_baseline=dict(cooling)
+                        if abs(float(s['gcode_move']['extrude_factor'])-1)>.001:
+                            raise RuntimeError('Runtime extrusion multiplier differs from the fixture')
+                    elif any(abs(pins[p])>.02 for p in ('fan1','fan2')) or abs(pins['fan0_en']-1)>.02:
                         raise RuntimeError('Fixture cooling conditions differ from the prepared profiles')
                     first_stage=c.start(event)
                     activated=True
-                    post(args.url,'/printer/gcode/script',{'script':stage_commands(first_stage)},key)
+                    post(args.url,'/printer/gcode/script',{'script':command(first_stage)},key)
                     waiting_target_since=time.monotonic();time.sleep(.5);continue
-                write_progress(args.progress_json,'running',stage=c.index+1,total=len(PLA_STAGES),
+                write_progress(args.progress_json,'running',stage=c.index+1,total=len(c.stages),
                                temperature=float(hot['temperature']),target=c.stage.target,flow=c.stage.flow)
-                if any(abs(pins[p]-value)>.02 for p,value in (('fan0',1),('fan0_en',1),('fan1',0),('fan2',0))):
+                fan_changed=any(abs(cooling[name]-value)>.02 for name,value in cooling_baseline.items()) if protocol else any(abs(pins[p]-value)>.02 for p,value in (('fan0',1),('fan0_en',1),('fan1',0),('fan2',0)))
+                if fan_changed:
                     raise RuntimeError('Fan conditions changed during calibration')
                 if abs(float(s['gcode_move']['extrude_factor'])-1)>.001:
                     raise RuntimeError('Runtime extrusion multiplier differs from the fixture')
@@ -275,10 +330,10 @@ def run_measurement(args,guard):
                 if next_stage=='complete':
                     cleanup_attempted=True
                     write_progress(args.progress_json,'stopping')
-                    cleanup_status=stop_calibration(args.url,args.filename,key)
+                    cleanup_status=cancel()
                     break
                 if next_stage is not None:
-                    post(args.url,'/printer/gcode/script',{'script':stage_commands(next_stage)},key)
+                    post(args.url,'/printer/gcode/script',{'script':command(next_stage)},key)
                     waiting_target_since=time.monotonic()
                     print('Stage:',next_stage.name,flush=True)
                 time.sleep(.5)
@@ -288,7 +343,7 @@ def run_measurement(args,guard):
             if cleanup_attempted:cleanup_error=str(error)
             if job_verified and not cleanup_attempted:
                 cleanup_attempted=True
-                try:cleanup_status=stop_calibration(args.url,args.filename,key)
+                try:cleanup_status=cancel()
                 except Exception as error:
                     cleanup_error=str(error)
                     print('Could not confirm cancellation; cancel the calibration in the printer UI.',flush=True)
@@ -297,7 +352,7 @@ def run_measurement(args,guard):
             with open(args.output+'.summary.json','x',encoding='utf-8') as summary:
                 json.dump({'completed':c.done,'stages':c.results,'flow_source':'commanded extruder velocity; not a melt measurement',
                            'printing_load_test':True,'sensor_response_only':True,'cancellation_confirmed':cleanup_status is not None,
-                           'cleanup_error':cleanup_error},summary,indent=2)
+                           'cleanup_error':cleanup_error,'generated_protocol':protocol,'cooling_baseline':cooling_baseline},summary,indent=2)
             state='completed' if c.done and cleanup_status is not None else 'stopped' if isinstance(sys.exc_info()[1],CalibrationStopped) and cleanup_status is not None else 'error'
             write_progress(args.progress_json,state,cleanup_confirmed=cleanup_status is not None,measurement_complete=c.done)
 

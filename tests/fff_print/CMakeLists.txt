@@ -7,6 +7,7 @@ add_executable(${_TEST_NAME}_tests
 	test_extrusion_entity.cpp
 	test_extrusion_processor.cpp
 	test_fill.cpp
+	test_loaded_thermal_calibration.cpp
 	test_interlayer_adhesion.cpp
 	test_overhang_recovery.cpp
 	test_flow.cpp

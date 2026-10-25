@@ -268,6 +268,8 @@ set(lisbslic3r_sources
     GCode/FanMover.hpp
     GCode/GCodeProvenance.cpp
     GCode/GCodeProvenance.hpp
+    LoadedThermalCalibration.cpp
+    LoadedThermalCalibration.hpp
     InterlayerAdhesionCalibration.cpp
     InterlayerAdhesionCalibration.hpp
     ThermalResponse.cpp
