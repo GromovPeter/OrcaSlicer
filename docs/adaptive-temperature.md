@@ -188,3 +188,6 @@ preparation. Packaging this branch as a public installer is a separate step.
 See [build instructions](adaptive-temperature-build.md),
 [validation instructions](adaptive-temperature-validation.md), and the
 [high-level designs](HLSD/thermal-flow-planning.md).
+
+<img width="1187" height="664" alt="image" src="https://github.com/user-attachments/assets/ea874b89-8666-4083-b25d-02a7100e62f8" />
+
