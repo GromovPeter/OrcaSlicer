@@ -26,13 +26,13 @@ overhang recovery disabled. Existing profiles do not need these features.
 ## Start with temperature-only planning
 
 1. Select your printer, filament and process. Keep a copy of the original presets.
-2. Open **Printer РІвЂ вЂ™ Basic information РІвЂ вЂ™ Adaptive nozzle temperature** and review
+2. Open **Printer > Basic information > Adaptive nozzle temperature** and review
    the printer's target rise/fall references and flow smoothing period.
-3. Open **Filament РІвЂ вЂ™ Filament РІвЂ вЂ™ Adaptive nozzle temperature**. Enter a table
+3. Open **Filament > Filament > Adaptive nozzle temperature**. Enter a table
    established for your own material and flow range, then enable adaptation.
 4. Leave **Coordinate flow with nozzle temperature** disabled for the first
    comparison. Slice and inspect **Temperature** in Preview.
-5. Open **View РІвЂ вЂ™ Adaptive temperature report** to review constrained transitions.
+5. Open **View > Adaptive temperature report** to review constrained transitions.
    Re-slice after changing settings; the report describes the latest slice.
 
 The first-layer nozzle target remains the starting target. While adaptation is
@@ -44,7 +44,7 @@ heater commands in protected custom G-code retain their own meaning.
 ### Flow/temperature table
 
 Enter one `flow, temperature` pair per row, with a decimal point for fractional
-numbers. Units are mmР’С–/s and Р’В°C. For example, the syntax is:
+numbers. Units are mm³/s and °C. For example, the syntax is:
 
 ```text
 1,197
@@ -56,7 +56,7 @@ numbers. Units are mmР’С–/s and Р’В°C. For example, the syntax is:
 These numbers illustrate the format; they are not a supplied material profile.
 Flow coordinates must increase. Temperatures must be within the filament's
 configured recommended range. Intermediate points are linearly interpolated:
-in the example, 5 mmР’С–/s gives approximately 204.1 Р’В°C. Values outside the table
+in the example, 5 mm³/s gives approximately 204.1 °C. Values outside the table
 use the nearest endpoint rather than extrapolating an unbounded temperature.
 Coordinated flow additionally requires temperatures to increase strictly with flow.
 The current editor is multiline text, not a dedicated row editor.
@@ -64,7 +64,7 @@ The current editor is multiline text, not a dedicated row editor.
 ### Ironing temperature
 
 When adaptive nozzle temperature is enabled, ironing uses the normal filament
-nozzle temperature plus **Ironing temperature offset** (Filament → Adaptive
+nozzle temperature plus **Ironing temperature offset** (Filament > Adaptive
 nozzle temperature, default +5 °C), clamped to the filament nozzle temperature
 limits. It does not use the flow/temperature table for its target.
 
@@ -79,13 +79,13 @@ is material-specific and needs print testing; +5 °C is a starting value.
 
 | Setting | Units | Purpose |
 | --- | --- | --- |
-| Target rise time | s/Р’В°C | Minimum time per degree of increasing target |
-| Target fall time | s/Р’В°C | Minimum time per degree of decreasing target |
+| Target rise time | s/°C | Minimum time per degree of increasing target |
+| Target fall time | s/°C | Minimum time per degree of decreasing target |
 | Flow smoothing period | s | Suppress short demand changes between features |
 | Minimum coordinated print speed | mm/s | Floor for additional thermal slowdown |
 | Additional temperature lead time | s | Extra lookahead allowance |
 | Minimum temperature command interval | s | Limit adaptive command frequency |
-| Temperature command step | Р’В°C | Target change size, 0.5 to 5; decimal commas are accepted |
+| Temperature command step | °C | Target change size, 0.5 to 5; decimal commas are accepted |
 
 Rise/fall settings limit commanded targets. They are not a live measurement of
 heater performance or melt temperature. Flow smoothing does not set motion
@@ -113,7 +113,7 @@ can change the test speeds.
 
 ## Thermal-response calibration
 
-Open **Calibration РІвЂ вЂ™ Hotend thermal response**. Importing an existing CSV and
+Open **Calibration > Hotend thermal response**. Importing an existing CSV and
 reviewing its analysis does not control the printer. The analysis displays
 accepted/excluded transitions, load/fan context and provisional response values.
 **Apply to printer settings**, **Save printer preset** and **Undo application**
@@ -155,7 +155,7 @@ and [loaded-calibration design](HLSD/loaded-thermal-calibration.md).
 
 ## Interlayer adhesion / temperature
 
-Open **Calibration РІвЂ вЂ™ Interlayer adhesion / temperature** with the intended
+Open **Calibration > Interlayer adhesion / temperature** with the intended
 printer, filament and plate selected. Enter wall width, layer height, target
 volumetric flow, start/end temperatures and temperature step. The tool creates
 a normal spiral-cylinder project; use the ordinary Slice plate and Print plate
@@ -176,9 +176,9 @@ not identify a precise stable test temperature. See [the calibration design](HLS
 
 ## Recovery after overhangs
 
-Find **Under-extrusion recovery after overhangs** in **Process РІвЂ вЂ™ Speed РІвЂ вЂ™ Advanced**.
+Find **Under-extrusion recovery after overhangs** in **Process > Speed > Advanced**.
 The settings are **Safe acceleration after overhang** and **Safe speed after
-overhang**, defaulting to 200 mm/sР’Р† and 50 mm/s. This Klipper option conflicts
+overhang**, defaulting to 200 mm/s² and 50 mm/s. This Klipper option conflicts
 with Extrusion rate smoothing; enable only one of them.
 
 The filter is taken from CrealityPrint v7.1.0 without local changes to its
