@@ -4,6 +4,11 @@
 > [fork user guide](docs/adaptive-temperature.md),
 > [build instructions](docs/adaptive-temperature-build.md), and
 > [validation status](docs/adaptive-temperature-validation.md).
+> **Windows B11:** [download the portable release](https://github.com/GromovPeter/OrcaSlicer/releases/tag/adaptive-temperature-b11-20261027),
+> extract the whole ZIP and run `Launch-Adaptive-Orca.cmd`.
+> Includes an ironing temperature offset, fractional command steps, vase/VFA support
+> and thermal calibration generated from the selected printer/filament presets.
+> The title bar and About dialog identify **Adaptive Temperature B11**.
 > The upstream project information follows below.
 
 <div align="center">

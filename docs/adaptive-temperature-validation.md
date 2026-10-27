@@ -23,6 +23,16 @@ against the immutable upstream source; enabled/disabled CLI slices succeeded
 and disabling recovery retained the baseline executable commands. These are
 historical baseline results, not a claim about every future revision.
 
+## B11 validation
+
+The Windows x64 Release B11 ironing implementation passed 22 adaptive planner
+cases / 748 assertions and 19 FFF integration/calibration cases / 319,412
+assertions. These cover ironing preheating, return to flow control, retained
+ironing speed, material target limits and unchanged executable motion in
+temperature-only mode. All changed C++ units passed clang-tidy. The development
+user reported that B11 works; this is not a comparative study of ironing surface
+quality across materials.
+
 ## Python tests
 
 With a Python 3 interpreter available, run these five offline modules:

@@ -276,6 +276,12 @@ AboutDialog::AboutDialog()
         credits_string->SetBackgroundColour(wxColour("#FFFFFF"));
 
         vesizer->Add(version, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(20));
+        auto* fork_version = new wxStaticText(this, wxID_ANY, wxString::FromUTF8(adaptive_build_label));
+        fork_version->SetFont(_build_string_font);
+        fork_version->SetForegroundColour(wxColour("#949494"));
+        fork_version->SetBackgroundColour(wxColour("#FFFFFF"));
+        vesizer->AddSpacer(FromDIP(5));
+        vesizer->Add(fork_version, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(20));
         vesizer->AddSpacer(FromDIP(5));
         vesizer->Add(credits_string, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(20));
         vesizer->Add(0, 0, 1, wxEXPAND, FromDIP(5));

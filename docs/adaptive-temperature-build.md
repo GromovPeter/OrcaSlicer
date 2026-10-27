@@ -5,6 +5,19 @@ temperature postprocessor. The development platform is Windows x64, MSVC 2022
 and Release configuration. Linux and macOS use upstream build entry points but
 have not been validated for these features.
 
+## Ready-to-run Windows B11
+
+Download the [B11 release](https://github.com/GromovPeter/OrcaSlicer/releases/tag/adaptive-temperature-b11-20261027),
+extract the complete ZIP to a local folder and run **Launch-Adaptive-Orca.cmd**.
+No compilation is needed. The executable, DLLs, resources and Python runtime must
+stay together. Microsoft Edge WebView2 Runtime is required for the setup/web UI.
+The launcher uses a separate settings directory under LOCALAPPDATA; import your
+own presets. Personal development settings are not included.
+
+The window title and **Help → About** display **Adaptive Temperature B11**;
+About also shows the source commit. This fork label is separate from OrcaSlicer's
+upstream version, which retains its profile/project compatibility meaning.
+
 ## Windows prerequisites
 
 - Git, CMake and Perl available to the build environment.

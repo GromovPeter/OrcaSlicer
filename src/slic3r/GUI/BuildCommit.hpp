@@ -12,4 +12,7 @@ extern const char *const build_commit_hash;
 // wherever the build is shown to a person.
 extern const char *const build_commit_label;
 
+// Human-readable fork release, independent of the upstream profile version.
+extern const char *const adaptive_build_label;
+
 }} // namespace Slic3r::GUI
