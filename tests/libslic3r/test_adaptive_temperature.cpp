@@ -427,3 +427,44 @@ TEST_CASE("Adaptive temperature commands retain decimals regardless of locale", 
     CHECK(GCodeWriter::set_temperature(230.75, gcfKlipper) == "M104 S230.75 ; set nozzle temperature\n");
     CHECK(GCodeWriter::set_temperature(230, gcfKlipper) == "M104 S230 ; set nozzle temperature\n");
 }
+
+TEST_CASE("Ironing uses a separate temperature and returns to flow control", "[AdaptiveTemperature]")
+{
+    auto s = settings();
+    s.ironing_temperature = 245.0;
+    FlowTimeline timeline;
+    std::map<unsigned int, double> feedrates;
+    for (unsigned int i = 0; i < 300; ++i) {
+        auto m = motion(i, 1.0, 0.1, i + 1);
+        if (i >= 80 && i < 200) m.role = erIroning;
+        timeline.append(m);
+        feedrates.emplace(i + 1, 600.0);
+    }
+    const auto plan = plan_adaptive_temperature(timeline, s);
+    REQUIRE_FALSE(plan.commands.empty());
+    bool anticipates = false, reaches_target = false;
+    for (const auto& command : plan.commands) {
+        if (command.time < 80 && command.temperature > 230.0) anticipates = true;
+        if (command.time >= 80 && command.time < 200 && command.temperature >= 244.0) reaches_target = true;
+        CHECK(command.temperature <= s.maximum_temperature);
+    }
+    CHECK(anticipates);
+    CHECK(reaches_target);
+    CHECK_THAT(plan.commands.back().temperature, WithinAbs(230.0, s.temperature_step));
+    FlowTimeline speed_timeline;
+    for (unsigned int i = 0; i < 300; ++i) {
+        auto m = motion(i, 1.0, 10.0, i + 1);
+        if (i >= 80 && i < 200) m.role = erIroning;
+        speed_timeline.append(m);
+    }
+    const auto flow_plan = plan_adaptive_flow(speed_timeline, feedrates, s, 5.0);
+    REQUIRE_FALSE(flow_plan.commands.empty());
+    for (const auto& command : flow_plan.commands) {
+        CHECK((command.source_line < 81 || command.source_line > 200));
+    }
+    s.ironing_temperature.reset();
+    const auto ordinary = plan_adaptive_temperature(timeline, s);
+    CHECK(ordinary.commands.empty());
+    s.ironing_temperature = std::numeric_limits<double>::quiet_NaN();
+    CHECK_THROWS_AS(validate_adaptive_temperature_settings(s), std::invalid_argument);
+}

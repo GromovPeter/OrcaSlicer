@@ -2,6 +2,7 @@
 #include "AdaptiveTemperatureReport.hpp"
 #include "GCode/FlowTimeline.hpp"
 #include "libslic3r/I18N.hpp"
+#include "libslic3r/ExtrusionEntity.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -47,6 +48,9 @@ void validate_adaptive_temperature_settings(const AdaptiveTemperatureSettings& s
         throw std::invalid_argument(_u8L("Temperature command step must be between 0.5 and 5 °C."));
     if (s.minimum_temperature >= s.maximum_temperature || s.table.size() < 2)
         throw std::invalid_argument(_u8L("Adaptive temperature needs valid limits and at least two table points"));
+    if (s.ironing_temperature && (!std::isfinite(*s.ironing_temperature) ||
+        *s.ironing_temperature < s.minimum_temperature || *s.ironing_temperature > s.maximum_temperature))
+        throw std::invalid_argument(_u8L("Invalid adaptive-temperature limits"));
     double previous = -1.0;
     for (const auto& p : s.table) {
         if (!std::isfinite(p.flow) || !std::isfinite(p.temperature) || p.flow < 0.0 || p.flow <= previous ||
@@ -124,7 +128,14 @@ void plan_region(const std::vector<FlowTimelineInterval>& intervals, size_t begi
             if (k < end - begin && intervals[begin + k].motion.duration > 0)
                 flow = (volumes[k + 1] - volumes[k]) / intervals[begin + k].motion.duration;
         }
-        requested.push_back(temperature_for_flow(flow, s.table));
+        // Ironing heats the existing surface: its small extrusion flow is not
+        // a useful temperature reference. Use the same lookahead and transition
+        // envelope as ordinary deposition, without adding blocking commands.
+        const auto role_position = std::upper_bound(starts.begin(), starts.end(), center);
+        const size_t role_index = role_position == starts.begin() ? 0 :
+            static_cast<size_t>(role_position - starts.begin() - 1);
+        const bool ironing = interval.motion.role == erIroning || intervals[begin + role_index].motion.role == erIroning;
+        requested.push_back(ironing && s.ironing_temperature ? *s.ironing_temperature : temperature_for_flow(flow, s.table));
     }
     std::vector<double> envelope = requested;
     // Backward feasibility envelope anticipates sustained demand. The forward

@@ -3,6 +3,7 @@
 #include "FlowTimeline.hpp"
 #include "AdaptiveTemperatureReport.hpp"
 
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -21,6 +22,7 @@ struct AdaptiveTemperatureSettings
     double minimum_command_interval{2.0};
     double temperature_step{1.0};
     bool deposition_time_only{false};
+    std::optional<double> ironing_temperature; // normal filament temperature plus material offset
 };
 
 struct AdaptiveTemperatureCommand

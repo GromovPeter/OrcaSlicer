@@ -2068,6 +2068,7 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionBools,              filament_coordinated_temperature))
     ((ConfigOptionFloat,              adaptive_temperature_min_print_speed))
     ((ConfigOptionStrings,            filament_flow_temperature_table))
+    ((ConfigOptionFloats,             filament_ironing_temperature_offset))
     ((ConfigOptionFloat,              adaptive_temperature_rise_time))
     ((ConfigOptionFloat,              adaptive_temperature_fall_time))
     ((ConfigOptionFloat,              adaptive_temperature_smoothing_period))

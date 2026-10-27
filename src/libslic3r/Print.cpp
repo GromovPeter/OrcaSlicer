@@ -208,6 +208,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "filament_coordinated_temperature",
         "adaptive_temperature_min_print_speed",
         "filament_flow_temperature_table",
+        "filament_ironing_temperature_offset",
         "adaptive_temperature_rise_time",
         "adaptive_temperature_fall_time",
         "adaptive_temperature_smoothing_period",

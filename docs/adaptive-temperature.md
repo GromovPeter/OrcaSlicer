@@ -195,3 +195,7 @@ See [build instructions](adaptive-temperature-build.md),
 
 <img width="1187" height="664" alt="image" src="https://github.com/user-attachments/assets/ea874b89-8666-4083-b25d-02a7100e62f8" />
 
+
+### Ironing temperature
+
+When adaptive nozzle temperature is enabled, ironing uses the normal filament nozzle temperature plus **Ironing temperature offset** (Filament → Adaptive nozzle temperature, default +5 °C), clamped to the filament nozzle temperature limits. It does not use the flow/temperature table for its target. The existing lookahead, rise/fall limits, command step and spacing still apply, so short passes may not reach the requested target. No blocking heat waits are added. Coordinated flow preserves ironing speed and excludes ironing from its neighbouring flow reference. Ordinary flow-based temperature control resumes after ironing. The first layer and custom G-code remain protected. The offset is material-specific and needs print testing; +5 °C is a starting value.

@@ -4632,6 +4632,7 @@ void TabFilament::build()
         optgroup->append_single_option_line("filament_adaptive_temperature", "", 0);
         optgroup->append_single_option_line("filament_coordinated_temperature", "", 0);
         optgroup->append_single_option_line("filament_flow_temperature_table", "", 0);
+        optgroup->append_single_option_line("filament_ironing_temperature_offset", "", 0);
 
         optgroup = page->new_optgroup(L("Bed temperature"), L"param_bed_temp");
         line = { L("Cool Plate (SuperTack)"),
@@ -5028,6 +5029,7 @@ void TabFilament::toggle_options()
         // If adaptive PA is not enabled, hide the adaptive PA model section
         toggle_option("nozzle_temperature", !m_config->opt_bool("filament_adaptive_temperature", variant_index), 0);
         toggle_option("filament_flow_temperature_table", m_config->opt_bool("filament_adaptive_temperature", variant_index), 0);
+        toggle_option("filament_ironing_temperature_offset", m_config->opt_bool("filament_adaptive_temperature", variant_index), 0);
         toggle_option("filament_coordinated_temperature", m_config->opt_bool("filament_adaptive_temperature", variant_index), 0);
         toggle_option("adaptive_pressure_advance", pa, 0);
         toggle_option("adaptive_pressure_advance_overhangs", pa, 0);

@@ -1,4 +1,5 @@
 #include "libslic3r/Config.hpp"
+#include "libslic3r/ExtrusionEntity.hpp"
 #include "libslic3r/GCodeReader.hpp"
 #include "libslic3r/GCode/AdaptiveTemperatureReport.hpp"
 #include <cmath>
@@ -270,4 +271,32 @@ TEST_CASE("VFA rejects coordinated flow even when temperature adaptation is disa
     print.set_calib_params(params);
     CHECK(print.validate().opt_key == "filament_coordinated_temperature");
     CHECK_THROWS_WITH(Test::gcode(print), Catch::Matchers::ContainsSubstring("Disable Coordinate flow"));
+}
+
+TEST_CASE("Adaptive ironing exports the material offset without changing motion", "[AdaptiveTemperature][GCode]")
+{
+    const bool original_bbl = GCodeProcessor::s_IsBBLPrinter;
+    const ScopeGuard restore([original_bbl] { GCodeProcessor::s_IsBBLPrinter = original_bbl; });
+    auto config = adaptive_config(false);
+    config.set_deserialize_strict({{"ironing_type", "top"}, {"ironing_speed", "20"},
+        {"adaptive_temperature_rise_time", "0.1"}, {"adaptive_temperature_fall_time", "0.1"},
+        {"adaptive_temperature_min_interval", "0.1"}, {"adaptive_temperature_smoothing_period", "0"}});
+    const double offset = GENERATE(5.0, 50.0, -50.0);
+    config.set_key_value("filament_ironing_temperature_offset", new ConfigOptionFloats{offset});
+    const auto baseline = Test::slice({make_cube(20.0, 20.0, 2.0)}, config);
+    config.set_key_value("filament_adaptive_temperature", new ConfigOptionBools{true});
+    Print print;
+    Test::init_and_process_print({make_cube(20.0, 20.0, 2.0)}, print, config);
+    GCodeProcessorResult result;
+    const auto adapted = Test::gcode(print, &result);
+    CHECK(executable_commands(adapted, false) == executable_commands(baseline, false));
+    const double target = std::clamp(230.0 + offset, 220.0, 260.0);
+    bool ironing = false, reached = false;
+    for (const auto& move : result.moves) {
+        if (move.type != EMoveType::Extrude || move.extrusion_role != erIroning) continue;
+        ironing = true;
+        if (std::abs(move.temperature - target) <= 1.0) reached = true;
+    }
+    CHECK(ironing);
+    CHECK(reached);
 }

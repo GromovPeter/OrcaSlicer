@@ -1496,6 +1496,7 @@ static std::vector<std::string> s_Preset_filament_options {/*"filament_colour", 
     "filament_tower_interface_print_temp",
     "nozzle_temperature", "nozzle_temperature_initial_layer",
     "filament_adaptive_temperature", "filament_coordinated_temperature", "filament_flow_temperature_table",
+    "filament_ironing_temperature_offset",
     // BBS
     "cool_plate_temp", "textured_cool_plate_temp", "eng_plate_temp", "hot_plate_temp", "textured_plate_temp", "cool_plate_temp_initial_layer", "textured_cool_plate_temp_initial_layer", "eng_plate_temp_initial_layer", "hot_plate_temp_initial_layer", "textured_plate_temp_initial_layer", "supertack_plate_temp_initial_layer", "supertack_plate_temp",
     // "bed_type",

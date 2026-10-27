@@ -3570,13 +3570,13 @@ void PrintConfigDef::init_fff_params()
 
     def = this->add("filament_adaptive_temperature", coBools);
     def->label = L("Enable adaptive nozzle temperature");
-    def->tooltip = L("Adjust the commanded nozzle temperature to the planned volumetric flow. Experimental: one material and one Klipper hotend. The first layer and custom G-code remain protected. Other layers nozzle temperature is ignored; the adaptive target starts from the first-layer temperature and follows the flow/temperature table within the target rise/fall limits. Printing speeds are preserved unless coordinated flow is enabled.");
+    def->tooltip = L("Adjust the commanded nozzle temperature to the planned volumetric flow. Experimental: one material and one Klipper hotend. The first layer and custom G-code remain protected. Other layers nozzle temperature is used only as the ironing temperature reference; otherwise the adaptive target starts from the first-layer temperature and follows the flow/temperature table within the target rise/fall limits. Printing speeds are preserved unless coordinated flow is enabled.");
     def->mode = comSimple;
     def->set_default_value(new ConfigOptionBools{false});
 
     def = this->add("filament_coordinated_temperature", coBools);
     def->label = L("Coordinate flow with nozzle temperature");
-    def->tooltip = L("Experimental: lower printing feedrates in advance to smooth nominal flow according to the target rise/fall settings. Requires adaptive nozzle temperature and a strictly increasing flow/temperature table. Preserves geometry, extrusion amount, travel and bridge speeds. May substantially increase print time; does not guarantee measured nozzle or melt temperature.");
+    def->tooltip = L("Experimental: lower printing feedrates in advance to smooth nominal flow according to the target rise/fall settings. Requires adaptive nozzle temperature and a strictly increasing flow/temperature table. Preserves geometry, extrusion amount, travel, bridge and ironing speeds. May substantially increase print time; does not guarantee measured nozzle or melt temperature.");
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionBools{false});
 
@@ -3588,6 +3588,15 @@ void PrintConfigDef::init_fff_params()
     def->max = 100;
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(5));
+
+    def = this->add("filament_ironing_temperature_offset", coFloats);
+    def->label = L("Ironing temperature offset");
+    def->tooltip = L("Temperature offset from the normal filament printing temperature during ironing. Applied when adaptive nozzle temperature is enabled. The target stays within the filament nozzle temperature limits. Ironing speed is preserved, and temperature changes are planned in advance without waiting for heating.");
+    def->sidetext = "°C";
+    def->min = -50;
+    def->max = 50;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloats{5.0});
 
     def = this->add("filament_flow_temperature_table", coStrings);
     def->label = L("Flow / temperature table");

@@ -2993,6 +2993,9 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
         settings.additional_lead_time = m_config.adaptive_temperature_lead_time;
         settings.minimum_command_interval = m_config.adaptive_temperature_min_interval;
         settings.temperature_step = m_config.adaptive_temperature_step;
+        settings.ironing_temperature = std::clamp(
+            double(m_config.nozzle_temperature.get_at(fi)) + m_config.filament_ironing_temperature_offset.get_at(fi),
+            settings.minimum_temperature, settings.maximum_temperature);
         AdaptiveTemperatureReport report;
         report.coordinated = coordinated_flow;
         report.original_time = m_processor.get_time(PrintEstimatedStatistics::ETimeMode::Normal);

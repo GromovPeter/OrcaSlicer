@@ -137,6 +137,9 @@ AdaptiveFlowPlan plan_adaptive_flow(const FlowTimeline& timeline,
             finish();
             if (m.protected_region || m.layer_id <= 1 || !m.heater_id || *m.heater_id != 0) continue;
         }
+        // Ironing speed controls surface finishing rather than melt throughput.
+        // Isolate it so its tiny flow cannot slow neighbouring normal extrusion.
+        if (m.role == erIroning) { finish(); continue; }
         filament = m.filament_id; target = m.target_temperature;
         const double volume = interval.deposited_volume(0, m.duration);
         if (volume <= 1e-9 || m.distance <= 1e-9 || m.kind != FlowMotionKind::Extrusion) continue;
