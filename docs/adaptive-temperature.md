@@ -10,6 +10,13 @@ Klipper hotend and layer-by-layer printing, including spiral vase mode. Unsuppor
 are rejected by validation. Defaults leave adaptation, coordinated flow and
 overhang recovery disabled. Existing profiles do not need these features.
 
+## Downloads
+
+Ready-to-run builds and release notes are available on the
+[GitHub Releases page](https://github.com/GromovPeter/OrcaSlicer/releases).
+Download the Windows ZIP, extract the entire archive and run
+**Launch-Adaptive-Orca.cmd**.
+
 ## Features
 
 - A native flow/temperature table in the filament preset.

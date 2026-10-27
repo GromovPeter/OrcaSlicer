@@ -4,6 +4,8 @@
 > [fork user guide](docs/adaptive-temperature.md),
 > [build instructions](docs/adaptive-temperature-build.md), and
 > [validation status](docs/adaptive-temperature-validation.md).
+> **Downloads:** [all releases and ready-to-run builds](https://github.com/GromovPeter/OrcaSlicer/releases).
+>
 > **Windows B11:** [download the portable release](https://github.com/GromovPeter/OrcaSlicer/releases/tag/adaptive-temperature-b11-20261027),
 > extract the whole ZIP and run `Launch-Adaptive-Orca.cmd`.
 > Includes an ironing temperature offset, fractional command steps, vase/VFA support
